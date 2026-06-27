@@ -103,9 +103,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--sustain-mode",
-        choices=("adaptive", "periodic"),
+        choices=("adaptive", "periodic", "hybrid", "chordal", "continuous_reactive"),
         default=None,
-        help="Sustain injection mode: adaptive to note spacing (default) or fixed periodic grid.",
+        help=(
+            "Sustain injection mode: adaptive, periodic, hybrid, chordal, "
+            "or continuous_reactive (always on with chord-based reactivation)."
+        ),
     )
     parser.add_argument(
         "--sustain-every-beats",
@@ -139,6 +142,72 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=None,
         help="Release sustain this many seconds before the next cycle starts.",
+    )
+    parser.add_argument(
+        "--sustain-hybrid-sparse-cycle-note-threshold",
+        type=int,
+        default=None,
+        help="Hybrid: max note onsets per periodic cycle to consider it sparse (eligible for cycle merge).",
+    )
+    parser.add_argument(
+        "--sustain-hybrid-max-sparse-cycle-group",
+        type=int,
+        default=None,
+        help="Hybrid: max number of consecutive sparse cycles merged into one longer sustain segment.",
+    )
+    parser.add_argument(
+        "--sustain-hybrid-extra-hold-seconds",
+        type=float,
+        default=None,
+        help="Hybrid: extra sustain hold added after merged sparse cycles.",
+    )
+    parser.add_argument(
+        "--sustain-hybrid-adaptive-gap-boost",
+        type=float,
+        default=None,
+        help="Hybrid: multiplier applied to adaptive gap threshold for broader phrase linking.",
+    )
+    parser.add_argument(
+        "--sustain-hybrid-release-factor",
+        type=float,
+        default=None,
+        help="Hybrid: factor applied to release-before-next (smaller keeps pedal down longer).",
+    )
+    parser.add_argument(
+        "--sustain-hybrid-merge-gap-seconds",
+        type=float,
+        default=None,
+        help="Hybrid: merge neighboring pedal intervals separated by less than this gap.",
+    )
+    parser.add_argument(
+        "--sustain-chordal-base-chords",
+        type=int,
+        default=None,
+        help="Chordal: baseline repedal cadence in chords (~X chords).",
+    )
+    parser.add_argument(
+        "--sustain-chordal-density-sensitivity",
+        type=float,
+        default=None,
+        help="Chordal: strength of density adaptation (0 disables adaptation).",
+    )
+    parser.add_argument(
+        "--sustain-chordal-onset-window-seconds",
+        type=float,
+        default=None,
+        help="Chordal: onset grouping window used to build chord events.",
+    )
+    parser.add_argument(
+        "--sustain-continuous-reactivation-every-chords",
+        type=int,
+        default=None,
+        help="Continuous reactive: trigger sustain reactivation about every X chords.",
+    )
+    parser.add_argument(
+        "--sustain-continuous-window-minutes",
+        type=float,
+        default=None,
+        help="Continuous reactive: window (minutes) used to estimate average chord density.",
     )
     dry_run_group = parser.add_mutually_exclusive_group()
     dry_run_group.add_argument(
@@ -227,6 +296,17 @@ def config_from_args(args: argparse.Namespace) -> CleanerConfig:
         "sustain_min_hold_seconds": args.sustain_min_hold_seconds,
         "sustain_max_hold_seconds": args.sustain_max_hold_seconds,
         "sustain_release_before_next_seconds": args.sustain_release_before_next_seconds,
+        "sustain_hybrid_sparse_cycle_note_threshold": args.sustain_hybrid_sparse_cycle_note_threshold,
+        "sustain_hybrid_max_sparse_cycle_group": args.sustain_hybrid_max_sparse_cycle_group,
+        "sustain_hybrid_extra_hold_seconds": args.sustain_hybrid_extra_hold_seconds,
+        "sustain_hybrid_adaptive_gap_boost": args.sustain_hybrid_adaptive_gap_boost,
+        "sustain_hybrid_release_factor": args.sustain_hybrid_release_factor,
+        "sustain_hybrid_merge_gap_seconds": args.sustain_hybrid_merge_gap_seconds,
+        "sustain_chordal_base_chords": args.sustain_chordal_base_chords,
+        "sustain_chordal_density_sensitivity": args.sustain_chordal_density_sensitivity,
+        "sustain_chordal_onset_window_seconds": args.sustain_chordal_onset_window_seconds,
+        "sustain_continuous_reactivation_every_chords": args.sustain_continuous_reactivation_every_chords,
+        "sustain_continuous_window_minutes": args.sustain_continuous_window_minutes,
         "dry_run": args.dry_run,
     }
     for field_name, value in overrides.items():

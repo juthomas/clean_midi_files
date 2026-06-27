@@ -58,6 +58,124 @@ LOG_COLORS = {
     "ERROR": QColor("#F28B82"),
 }
 
+SUSTAIN_PROFILE_CUSTOM = "custom"
+SUSTAIN_PROFILES = {
+    "natural": {
+        "sustain_mode": "adaptive",
+        "sustain_every_beats": 4,
+        "sustain_gap_multiplier": 1.8,
+        "sustain_min_hold_seconds": 0.2,
+        "sustain_max_hold_seconds": 8.0,
+        "sustain_release_before_next_seconds": 0.05,
+        "sustain_hybrid_sparse_cycle_note_threshold": 2,
+        "sustain_hybrid_max_sparse_cycle_group": 3,
+        "sustain_hybrid_extra_hold_seconds": 0.25,
+        "sustain_hybrid_adaptive_gap_boost": 1.25,
+        "sustain_hybrid_release_factor": 0.6,
+        "sustain_hybrid_merge_gap_seconds": 0.08,
+        "sustain_chordal_base_chords": 3,
+        "sustain_chordal_density_sensitivity": 0.75,
+        "sustain_chordal_onset_window_seconds": 0.05,
+        "sustain_continuous_reactivation_every_chords": 3,
+        "sustain_continuous_window_minutes": 1.0,
+    },
+    "hybrid_musical": {
+        "sustain_mode": "hybrid",
+        "sustain_every_beats": 4,
+        "sustain_gap_multiplier": 1.7,
+        "sustain_min_hold_seconds": 0.2,
+        "sustain_max_hold_seconds": 5.5,
+        "sustain_release_before_next_seconds": 0.08,
+        "sustain_hybrid_sparse_cycle_note_threshold": 1,
+        "sustain_hybrid_max_sparse_cycle_group": 2,
+        "sustain_hybrid_extra_hold_seconds": 0.12,
+        "sustain_hybrid_adaptive_gap_boost": 1.12,
+        "sustain_hybrid_release_factor": 1.0,
+        "sustain_hybrid_merge_gap_seconds": 0.02,
+        "sustain_chordal_base_chords": 3,
+        "sustain_chordal_density_sensitivity": 0.75,
+        "sustain_chordal_onset_window_seconds": 0.05,
+        "sustain_continuous_reactivation_every_chords": 3,
+        "sustain_continuous_window_minutes": 1.0,
+    },
+    "periodic_rhythm": {
+        "sustain_mode": "periodic",
+        "sustain_every_beats": 4,
+        "sustain_gap_multiplier": 1.8,
+        "sustain_min_hold_seconds": 0.2,
+        "sustain_max_hold_seconds": 8.0,
+        "sustain_release_before_next_seconds": 0.08,
+        "sustain_hybrid_sparse_cycle_note_threshold": 2,
+        "sustain_hybrid_max_sparse_cycle_group": 3,
+        "sustain_hybrid_extra_hold_seconds": 0.25,
+        "sustain_hybrid_adaptive_gap_boost": 1.25,
+        "sustain_hybrid_release_factor": 0.6,
+        "sustain_hybrid_merge_gap_seconds": 0.08,
+        "sustain_chordal_base_chords": 3,
+        "sustain_chordal_density_sensitivity": 0.75,
+        "sustain_chordal_onset_window_seconds": 0.05,
+        "sustain_continuous_reactivation_every_chords": 3,
+        "sustain_continuous_window_minutes": 1.0,
+    },
+    "dry": {
+        "sustain_mode": "adaptive",
+        "sustain_every_beats": 4,
+        "sustain_gap_multiplier": 0.6,
+        "sustain_min_hold_seconds": 0.03,
+        "sustain_max_hold_seconds": 0.12,
+        "sustain_release_before_next_seconds": 0.03,
+        "sustain_hybrid_sparse_cycle_note_threshold": 0,
+        "sustain_hybrid_max_sparse_cycle_group": 1,
+        "sustain_hybrid_extra_hold_seconds": 0.0,
+        "sustain_hybrid_adaptive_gap_boost": 1.0,
+        "sustain_hybrid_release_factor": 1.0,
+        "sustain_hybrid_merge_gap_seconds": 0.0,
+        "sustain_chordal_base_chords": 2,
+        "sustain_chordal_density_sensitivity": 0.4,
+        "sustain_chordal_onset_window_seconds": 0.04,
+        "sustain_continuous_reactivation_every_chords": 2,
+        "sustain_continuous_window_minutes": 1.0,
+    },
+    "chordal_adaptive": {
+        "sustain_mode": "chordal",
+        "sustain_every_beats": 4,
+        "sustain_gap_multiplier": 1.8,
+        "sustain_min_hold_seconds": 0.15,
+        "sustain_max_hold_seconds": 4.0,
+        "sustain_release_before_next_seconds": 0.06,
+        "sustain_hybrid_sparse_cycle_note_threshold": 1,
+        "sustain_hybrid_max_sparse_cycle_group": 2,
+        "sustain_hybrid_extra_hold_seconds": 0.12,
+        "sustain_hybrid_adaptive_gap_boost": 1.0,
+        "sustain_hybrid_release_factor": 1.0,
+        "sustain_hybrid_merge_gap_seconds": 0.02,
+        "sustain_chordal_base_chords": 3,
+        "sustain_chordal_density_sensitivity": 0.85,
+        "sustain_chordal_onset_window_seconds": 0.05,
+        "sustain_continuous_reactivation_every_chords": 3,
+        "sustain_continuous_window_minutes": 1.0,
+    },
+    "continuous_reactive": {
+        "sustain_mode": "continuous_reactive",
+        "sustain_every_beats": 4,
+        "sustain_gap_multiplier": 1.8,
+        "sustain_min_hold_seconds": 0.12,
+        "sustain_max_hold_seconds": 8.0,
+        "sustain_release_before_next_seconds": 0.05,
+        "sustain_hybrid_sparse_cycle_note_threshold": 1,
+        "sustain_hybrid_max_sparse_cycle_group": 2,
+        "sustain_hybrid_extra_hold_seconds": 0.1,
+        "sustain_hybrid_adaptive_gap_boost": 1.0,
+        "sustain_hybrid_release_factor": 1.0,
+        "sustain_hybrid_merge_gap_seconds": 0.0,
+        "sustain_chordal_base_chords": 3,
+        "sustain_chordal_density_sensitivity": 0.8,
+        "sustain_chordal_onset_window_seconds": 0.05,
+        "sustain_continuous_reactivation_every_chords": 3,
+        "sustain_continuous_window_minutes": 1.0,
+    },
+}
+
 
 def normalize_log_line(raw_line: str) -> tuple[str, str]:
     line = raw_line.strip()
@@ -237,6 +355,7 @@ class MainWindow(QMainWindow):
         self._worker: Optional[CleanerWorker] = None
         self._pdf_worker: Optional[PdfOnlyWorker] = None
         self._cancel_event = threading.Event()
+        self._applying_sustain_profile = False
         self.settings = QSettings("punkhazard", "MidiCleaner")
         self._build_ui()
         self._load_defaults()
@@ -391,9 +510,25 @@ class MainWindow(QMainWindow):
     def _build_sustain_group(self) -> QGroupBox:
         group = QGroupBox("Sustain")
         form = QFormLayout(group)
+        self.sustain_profile_combo = QComboBox()
+        self.sustain_profile_combo.addItem("Personnalise", SUSTAIN_PROFILE_CUSTOM)
+        self.sustain_profile_combo.addItem("Naturel (recommande)", "natural")
+        self.sustain_profile_combo.addItem("Hybride musical", "hybrid_musical")
+        self.sustain_profile_combo.addItem("Accord adaptatif", "chordal_adaptive")
+        self.sustain_profile_combo.addItem("Continu reactif accords", "continuous_reactive")
+        self.sustain_profile_combo.addItem("Periodique rythmique", "periodic_rhythm")
+        self.sustain_profile_combo.addItem("Sec / discret", "dry")
+        self.sustain_profile_combo.currentIndexChanged.connect(self._on_sustain_profile_changed)
+        self.show_advanced_sustain = QCheckBox("Afficher reglages avances sustain")
+        self.show_advanced_sustain.setChecked(False)
+        self.show_advanced_sustain.toggled.connect(self._set_sustain_advanced_visible)
+
         self.sustain_mode = QComboBox()
         self.sustain_mode.addItem("Adaptatif", "adaptive")
         self.sustain_mode.addItem("Periodique", "periodic")
+        self.sustain_mode.addItem("Hybride (recommande)", "hybrid")
+        self.sustain_mode.addItem("Accords adaptatif", "chordal")
+        self.sustain_mode.addItem("Continu reactif accords", "continuous_reactive")
         self.sustain_every_beats = QSpinBox()
         self.sustain_every_beats.setRange(1, 64)
         self.sustain_gap_multiplier = QDoubleSpinBox()
@@ -409,15 +544,103 @@ class MainWindow(QMainWindow):
         self.sustain_release.setRange(0.0, 60.0)
         self.sustain_release.setSingleStep(0.01)
         self.sustain_release.setToolTip("Seconds in mixed/seconds mode, beats in beats mode")
-        form.addRow("Mode sustain", self.sustain_mode)
-        form.addRow("Sustain tous les N beats (beats)", self.sustain_every_beats)
-        form.addRow("Multiplicateur gap sustain", self.sustain_gap_multiplier)
+        self.sustain_hybrid_sparse_threshold = QSpinBox()
+        self.sustain_hybrid_sparse_threshold.setRange(0, 64)
+        self.sustain_hybrid_sparse_group = QSpinBox()
+        self.sustain_hybrid_sparse_group.setRange(1, 16)
+        self.sustain_hybrid_extra_hold = QDoubleSpinBox()
+        self.sustain_hybrid_extra_hold.setRange(0.0, 60.0)
+        self.sustain_hybrid_extra_hold.setSingleStep(0.05)
+        self.sustain_hybrid_adaptive_boost = QDoubleSpinBox()
+        self.sustain_hybrid_adaptive_boost.setRange(0.1, 10.0)
+        self.sustain_hybrid_adaptive_boost.setSingleStep(0.05)
+        self.sustain_hybrid_release_factor = QDoubleSpinBox()
+        self.sustain_hybrid_release_factor.setRange(0.05, 3.0)
+        self.sustain_hybrid_release_factor.setSingleStep(0.05)
+        self.sustain_hybrid_merge_gap = QDoubleSpinBox()
+        self.sustain_hybrid_merge_gap.setRange(0.0, 10.0)
+        self.sustain_hybrid_merge_gap.setSingleStep(0.01)
+        self.sustain_chordal_base_chords = QSpinBox()
+        self.sustain_chordal_base_chords.setRange(1, 32)
+        self.sustain_chordal_density_sensitivity = QDoubleSpinBox()
+        self.sustain_chordal_density_sensitivity.setRange(0.0, 3.0)
+        self.sustain_chordal_density_sensitivity.setSingleStep(0.05)
+        self.sustain_chordal_onset_window = QDoubleSpinBox()
+        self.sustain_chordal_onset_window.setRange(0.0, 2.0)
+        self.sustain_chordal_onset_window.setSingleStep(0.01)
+        self.sustain_continuous_reactivate_chords = QSpinBox()
+        self.sustain_continuous_reactivate_chords.setRange(1, 64)
+        self.sustain_continuous_window_minutes = QDoubleSpinBox()
+        self.sustain_continuous_window_minutes.setRange(0.1, 60.0)
+        self.sustain_continuous_window_minutes.setSingleStep(0.1)
+
         self.label_sustain_min_hold = QLabel("Duree min sustain")
         self.label_sustain_max_hold = QLabel("Duree max sustain")
         self.label_sustain_release = QLabel("Relache sustain avant prochain")
-        form.addRow(self.label_sustain_min_hold, self.sustain_min_hold)
-        form.addRow(self.label_sustain_max_hold, self.sustain_max_hold)
-        form.addRow(self.label_sustain_release, self.sustain_release)
+        self.label_sustain_hybrid_extra_hold = QLabel("Hybride: tenue supplementaire sparse")
+        self.label_sustain_hybrid_merge_gap = QLabel("Hybride: gap fusion intervalles")
+        self.label_sustain_mode = QLabel("Mode sustain")
+        self.label_sustain_every_beats = QLabel("Sustain tous les N beats (beats)")
+        self.label_sustain_gap_multiplier = QLabel("Multiplicateur gap sustain")
+        self.label_sustain_hybrid_sparse_threshold = QLabel("Hybride: seuil sparse (notes/cycle)")
+        self.label_sustain_hybrid_sparse_group = QLabel("Hybride: max cycles sparse fusionnes")
+        self.label_sustain_hybrid_adaptive_boost = QLabel("Hybride: boost gap adaptatif (x)")
+        self.label_sustain_hybrid_release_factor = QLabel("Hybride: facteur release (x)")
+        self.label_sustain_chordal_base_chords = QLabel("Accords adaptatif: repedalage ~X accords")
+        self.label_sustain_chordal_density_sensitivity = QLabel("Accords adaptatif: sensibilite densite")
+        self.label_sustain_chordal_onset_window = QLabel("Accords adaptatif: fenetre regroupement accords")
+        self.label_sustain_continuous_reactivate_chords = QLabel("Continu reactif: reactivation tous les X accords")
+        self.label_sustain_continuous_window_minutes = QLabel("Continu reactif: fenetre moyenne (minutes)")
+
+        form.addRow(self.label_sustain_chordal_base_chords, self.sustain_chordal_base_chords)
+        form.addRow(self.label_sustain_chordal_density_sensitivity, self.sustain_chordal_density_sensitivity)
+        form.addRow(self.label_sustain_chordal_onset_window, self.sustain_chordal_onset_window)
+        form.addRow(self.label_sustain_continuous_reactivate_chords, self.sustain_continuous_reactivate_chords)
+        form.addRow(self.label_sustain_continuous_window_minutes, self.sustain_continuous_window_minutes)
+
+        self.sustain_advanced_widget = QWidget()
+        advanced_form = QFormLayout(self.sustain_advanced_widget)
+        advanced_form.addRow(self.label_sustain_mode, self.sustain_mode)
+        advanced_form.addRow(self.label_sustain_every_beats, self.sustain_every_beats)
+        advanced_form.addRow(self.label_sustain_gap_multiplier, self.sustain_gap_multiplier)
+        advanced_form.addRow(self.label_sustain_min_hold, self.sustain_min_hold)
+        advanced_form.addRow(self.label_sustain_max_hold, self.sustain_max_hold)
+        advanced_form.addRow(self.label_sustain_release, self.sustain_release)
+        advanced_form.addRow(self.label_sustain_hybrid_sparse_threshold, self.sustain_hybrid_sparse_threshold)
+        advanced_form.addRow(self.label_sustain_hybrid_sparse_group, self.sustain_hybrid_sparse_group)
+        advanced_form.addRow(self.label_sustain_hybrid_extra_hold, self.sustain_hybrid_extra_hold)
+        advanced_form.addRow(self.label_sustain_hybrid_adaptive_boost, self.sustain_hybrid_adaptive_boost)
+        advanced_form.addRow(self.label_sustain_hybrid_release_factor, self.sustain_hybrid_release_factor)
+        advanced_form.addRow(self.label_sustain_hybrid_merge_gap, self.sustain_hybrid_merge_gap)
+
+        form.addRow("Profil sustain", self.sustain_profile_combo)
+        form.addRow(self.show_advanced_sustain)
+        form.addRow(self.sustain_advanced_widget)
+
+        self.sustain_mode.currentIndexChanged.connect(self._refresh_sustain_control_visibility)
+        self.sustain_mode.currentIndexChanged.connect(self._mark_sustain_profile_custom)
+        for spin in (
+            self.sustain_every_beats,
+            self.sustain_gap_multiplier,
+            self.sustain_min_hold,
+            self.sustain_max_hold,
+            self.sustain_release,
+            self.sustain_hybrid_sparse_threshold,
+            self.sustain_hybrid_sparse_group,
+            self.sustain_hybrid_extra_hold,
+            self.sustain_hybrid_adaptive_boost,
+            self.sustain_hybrid_release_factor,
+            self.sustain_hybrid_merge_gap,
+            self.sustain_chordal_base_chords,
+            self.sustain_chordal_density_sensitivity,
+            self.sustain_chordal_onset_window,
+            self.sustain_continuous_reactivate_chords,
+            self.sustain_continuous_window_minutes,
+        ):
+            spin.valueChanged.connect(self._mark_sustain_profile_custom)
+
+        self._set_sustain_advanced_visible(False)
+        self._refresh_sustain_control_visibility()
         return group
 
     def _build_pdf_group(self) -> QGroupBox:
@@ -472,6 +695,17 @@ class MainWindow(QMainWindow):
             sustain_min_hold_seconds=self.sustain_min_hold.value(),
             sustain_max_hold_seconds=self.sustain_max_hold.value(),
             sustain_release_before_next_seconds=self.sustain_release.value(),
+            sustain_hybrid_sparse_cycle_note_threshold=self.sustain_hybrid_sparse_threshold.value(),
+            sustain_hybrid_max_sparse_cycle_group=self.sustain_hybrid_sparse_group.value(),
+            sustain_hybrid_extra_hold_seconds=self.sustain_hybrid_extra_hold.value(),
+            sustain_hybrid_adaptive_gap_boost=self.sustain_hybrid_adaptive_boost.value(),
+            sustain_hybrid_release_factor=self.sustain_hybrid_release_factor.value(),
+            sustain_hybrid_merge_gap_seconds=self.sustain_hybrid_merge_gap.value(),
+            sustain_chordal_base_chords=self.sustain_chordal_base_chords.value(),
+            sustain_chordal_density_sensitivity=self.sustain_chordal_density_sensitivity.value(),
+            sustain_chordal_onset_window_seconds=self.sustain_chordal_onset_window.value(),
+            sustain_continuous_reactivation_every_chords=self.sustain_continuous_reactivate_chords.value(),
+            sustain_continuous_window_minutes=self.sustain_continuous_window_minutes.value(),
         )
         config.validate()
         return config
@@ -503,7 +737,20 @@ class MainWindow(QMainWindow):
         self.sustain_min_hold.setValue(config.sustain_min_hold_seconds)
         self.sustain_max_hold.setValue(config.sustain_max_hold_seconds)
         self.sustain_release.setValue(config.sustain_release_before_next_seconds)
+        self.sustain_hybrid_sparse_threshold.setValue(config.sustain_hybrid_sparse_cycle_note_threshold)
+        self.sustain_hybrid_sparse_group.setValue(config.sustain_hybrid_max_sparse_cycle_group)
+        self.sustain_hybrid_extra_hold.setValue(config.sustain_hybrid_extra_hold_seconds)
+        self.sustain_hybrid_adaptive_boost.setValue(config.sustain_hybrid_adaptive_gap_boost)
+        self.sustain_hybrid_release_factor.setValue(config.sustain_hybrid_release_factor)
+        self.sustain_hybrid_merge_gap.setValue(config.sustain_hybrid_merge_gap_seconds)
+        self.sustain_chordal_base_chords.setValue(config.sustain_chordal_base_chords)
+        self.sustain_chordal_density_sensitivity.setValue(config.sustain_chordal_density_sensitivity)
+        self.sustain_chordal_onset_window.setValue(config.sustain_chordal_onset_window_seconds)
+        self.sustain_continuous_reactivate_chords.setValue(config.sustain_continuous_reactivation_every_chords)
+        self.sustain_continuous_window_minutes.setValue(config.sustain_continuous_window_minutes)
         self._refresh_time_unit_labels()
+        self._refresh_sustain_control_visibility()
+        self._sync_sustain_profile_from_values()
 
     def _refresh_time_unit_labels(self, _index: int = -1) -> None:
         unit_mode = str(self.time_unit_combo.currentData())
@@ -524,6 +771,9 @@ class MainWindow(QMainWindow):
         self.label_sustain_min_hold.setText(f"Duree min sustain ({unit})")
         self.label_sustain_max_hold.setText(f"Duree max sustain ({unit})")
         self.label_sustain_release.setText(f"Relache sustain avant prochain ({unit})")
+        self.label_sustain_hybrid_extra_hold.setText(f"Hybride: tenue supplementaire sparse ({unit})")
+        self.label_sustain_hybrid_merge_gap.setText(f"Hybride: gap fusion intervalles ({unit})")
+        self.label_sustain_chordal_onset_window.setText(f"Accords adaptatif: fenetre regroupement accords ({unit})")
 
         common_tooltip = (
             f"{mode_hint}. Unite actuelle: {unit}. "
@@ -536,6 +786,166 @@ class MainWindow(QMainWindow):
         self.sustain_min_hold.setToolTip(common_tooltip)
         self.sustain_max_hold.setToolTip(common_tooltip)
         self.sustain_release.setToolTip(common_tooltip)
+        self.sustain_hybrid_extra_hold.setToolTip(common_tooltip)
+        self.sustain_hybrid_merge_gap.setToolTip(common_tooltip)
+        self.sustain_chordal_onset_window.setToolTip(common_tooltip)
+
+    def _set_sustain_advanced_visible(self, visible: bool) -> None:
+        self.sustain_advanced_widget.setVisible(visible)
+
+    def _on_sustain_profile_changed(self, _index: int) -> None:
+        if self._applying_sustain_profile:
+            return
+        profile_id = str(self.sustain_profile_combo.currentData())
+        if profile_id == SUSTAIN_PROFILE_CUSTOM:
+            return
+        self._apply_sustain_profile(profile_id)
+
+    def _apply_sustain_profile(self, profile_id: str) -> None:
+        profile = SUSTAIN_PROFILES.get(profile_id)
+        if profile is None:
+            return
+        self._applying_sustain_profile = True
+        try:
+            mode_idx = self.sustain_mode.findData(profile["sustain_mode"])
+            if mode_idx >= 0:
+                self.sustain_mode.setCurrentIndex(mode_idx)
+            self.sustain_every_beats.setValue(int(profile["sustain_every_beats"]))
+            self.sustain_gap_multiplier.setValue(float(profile["sustain_gap_multiplier"]))
+            self.sustain_min_hold.setValue(float(profile["sustain_min_hold_seconds"]))
+            self.sustain_max_hold.setValue(float(profile["sustain_max_hold_seconds"]))
+            self.sustain_release.setValue(float(profile["sustain_release_before_next_seconds"]))
+            self.sustain_hybrid_sparse_threshold.setValue(int(profile["sustain_hybrid_sparse_cycle_note_threshold"]))
+            self.sustain_hybrid_sparse_group.setValue(int(profile["sustain_hybrid_max_sparse_cycle_group"]))
+            self.sustain_hybrid_extra_hold.setValue(float(profile["sustain_hybrid_extra_hold_seconds"]))
+            self.sustain_hybrid_adaptive_boost.setValue(float(profile["sustain_hybrid_adaptive_gap_boost"]))
+            self.sustain_hybrid_release_factor.setValue(float(profile["sustain_hybrid_release_factor"]))
+            self.sustain_hybrid_merge_gap.setValue(float(profile["sustain_hybrid_merge_gap_seconds"]))
+            self.sustain_chordal_base_chords.setValue(int(profile["sustain_chordal_base_chords"]))
+            self.sustain_chordal_density_sensitivity.setValue(float(profile["sustain_chordal_density_sensitivity"]))
+            self.sustain_chordal_onset_window.setValue(float(profile["sustain_chordal_onset_window_seconds"]))
+            self.sustain_continuous_reactivate_chords.setValue(int(profile["sustain_continuous_reactivation_every_chords"]))
+            self.sustain_continuous_window_minutes.setValue(float(profile["sustain_continuous_window_minutes"]))
+        finally:
+            self._applying_sustain_profile = False
+        self._refresh_sustain_control_visibility()
+
+    def _mark_sustain_profile_custom(self, *_args) -> None:
+        if self._applying_sustain_profile:
+            return
+        idx = self.sustain_profile_combo.findData(SUSTAIN_PROFILE_CUSTOM)
+        if idx >= 0 and self.sustain_profile_combo.currentIndex() != idx:
+            self._applying_sustain_profile = True
+            try:
+                self.sustain_profile_combo.setCurrentIndex(idx)
+            finally:
+                self._applying_sustain_profile = False
+
+    def _refresh_sustain_control_visibility(self, _index: int = -1) -> None:
+        mode = str(self.sustain_mode.currentData())
+        is_hybrid = mode == "hybrid"
+        is_chordal = mode == "chordal"
+        is_continuous_reactive = mode == "continuous_reactive"
+        uses_periodic_grid = mode in {"periodic", "hybrid"}
+        uses_adaptive = mode in {"adaptive", "hybrid"}
+        uses_hold_window = mode in {"adaptive", "hybrid", "chordal", "continuous_reactive"}
+
+        self.label_sustain_every_beats.setVisible(uses_periodic_grid)
+        self.sustain_every_beats.setVisible(uses_periodic_grid)
+
+        self.label_sustain_gap_multiplier.setVisible(uses_adaptive)
+        self.sustain_gap_multiplier.setVisible(uses_adaptive)
+        self.label_sustain_min_hold.setVisible(uses_hold_window)
+        self.sustain_min_hold.setVisible(uses_hold_window)
+        self.label_sustain_max_hold.setVisible(uses_hold_window)
+        self.sustain_max_hold.setVisible(uses_hold_window)
+
+        for label, widget in (
+            (self.label_sustain_hybrid_sparse_threshold, self.sustain_hybrid_sparse_threshold),
+            (self.label_sustain_hybrid_sparse_group, self.sustain_hybrid_sparse_group),
+            (self.label_sustain_hybrid_extra_hold, self.sustain_hybrid_extra_hold),
+            (self.label_sustain_hybrid_adaptive_boost, self.sustain_hybrid_adaptive_boost),
+            (self.label_sustain_hybrid_release_factor, self.sustain_hybrid_release_factor),
+            (self.label_sustain_hybrid_merge_gap, self.sustain_hybrid_merge_gap),
+        ):
+            label.setVisible(is_hybrid)
+            widget.setVisible(is_hybrid)
+
+        self.label_sustain_chordal_base_chords.setVisible(is_chordal)
+        self.sustain_chordal_base_chords.setVisible(is_chordal)
+        self.label_sustain_chordal_density_sensitivity.setVisible(is_chordal)
+        self.sustain_chordal_density_sensitivity.setVisible(is_chordal)
+        self.label_sustain_chordal_onset_window.setVisible(is_chordal)
+        self.sustain_chordal_onset_window.setVisible(is_chordal)
+        self.label_sustain_continuous_reactivate_chords.setVisible(is_continuous_reactive)
+        self.sustain_continuous_reactivate_chords.setVisible(is_continuous_reactive)
+        self.label_sustain_continuous_window_minutes.setVisible(is_continuous_reactive)
+        self.sustain_continuous_window_minutes.setVisible(is_continuous_reactive)
+
+    def _sync_sustain_profile_from_values(self) -> None:
+        current = {
+            "sustain_mode": str(self.sustain_mode.currentData()),
+            "sustain_every_beats": self.sustain_every_beats.value(),
+            "sustain_gap_multiplier": self.sustain_gap_multiplier.value(),
+            "sustain_min_hold_seconds": self.sustain_min_hold.value(),
+            "sustain_max_hold_seconds": self.sustain_max_hold.value(),
+            "sustain_release_before_next_seconds": self.sustain_release.value(),
+            "sustain_hybrid_sparse_cycle_note_threshold": self.sustain_hybrid_sparse_threshold.value(),
+            "sustain_hybrid_max_sparse_cycle_group": self.sustain_hybrid_sparse_group.value(),
+            "sustain_hybrid_extra_hold_seconds": self.sustain_hybrid_extra_hold.value(),
+            "sustain_hybrid_adaptive_gap_boost": self.sustain_hybrid_adaptive_boost.value(),
+            "sustain_hybrid_release_factor": self.sustain_hybrid_release_factor.value(),
+            "sustain_hybrid_merge_gap_seconds": self.sustain_hybrid_merge_gap.value(),
+            "sustain_chordal_base_chords": self.sustain_chordal_base_chords.value(),
+            "sustain_chordal_density_sensitivity": self.sustain_chordal_density_sensitivity.value(),
+            "sustain_chordal_onset_window_seconds": self.sustain_chordal_onset_window.value(),
+            "sustain_continuous_reactivation_every_chords": self.sustain_continuous_reactivate_chords.value(),
+            "sustain_continuous_window_minutes": self.sustain_continuous_window_minutes.value(),
+        }
+        matched_profile = SUSTAIN_PROFILE_CUSTOM
+        for profile_id, profile_values in SUSTAIN_PROFILES.items():
+            if str(profile_values["sustain_mode"]) != str(current["sustain_mode"]):
+                continue
+            if int(profile_values["sustain_every_beats"]) != int(current["sustain_every_beats"]):
+                continue
+            if int(profile_values["sustain_hybrid_sparse_cycle_note_threshold"]) != int(
+                current["sustain_hybrid_sparse_cycle_note_threshold"]
+            ):
+                continue
+            if int(profile_values["sustain_hybrid_max_sparse_cycle_group"]) != int(
+                current["sustain_hybrid_max_sparse_cycle_group"]
+            ):
+                continue
+            if int(profile_values["sustain_chordal_base_chords"]) != int(current["sustain_chordal_base_chords"]):
+                continue
+            if int(profile_values["sustain_continuous_reactivation_every_chords"]) != int(
+                current["sustain_continuous_reactivation_every_chords"]
+            ):
+                continue
+            float_keys = (
+                "sustain_gap_multiplier",
+                "sustain_min_hold_seconds",
+                "sustain_max_hold_seconds",
+                "sustain_release_before_next_seconds",
+                "sustain_hybrid_extra_hold_seconds",
+                "sustain_hybrid_adaptive_gap_boost",
+                "sustain_hybrid_release_factor",
+                "sustain_hybrid_merge_gap_seconds",
+                "sustain_chordal_density_sensitivity",
+                "sustain_chordal_onset_window_seconds",
+                "sustain_continuous_window_minutes",
+            )
+            if all(abs(float(profile_values[k]) - float(current[k])) < 1e-6 for k in float_keys):
+                matched_profile = profile_id
+                break
+
+        profile_idx = self.sustain_profile_combo.findData(matched_profile)
+        if profile_idx >= 0:
+            self._applying_sustain_profile = True
+            try:
+                self.sustain_profile_combo.setCurrentIndex(profile_idx)
+            finally:
+                self._applying_sustain_profile = False
 
     def _pick_directory(self, target: QLineEdit) -> None:
         chosen = QFileDialog.getExistingDirectory(self, "Choose directory", target.text() or str(Path.cwd()))
@@ -767,6 +1177,7 @@ class MainWindow(QMainWindow):
     def _persist_settings(self) -> None:
         config = self._build_config_from_ui()
         self.settings.setValue("cleaner_config", json.dumps(config.as_json_dict()))
+        self.settings.setValue("sustain_show_advanced", self.show_advanced_sustain.isChecked())
         self.settings.setValue("pdf_enabled", self.pdf_enabled.isChecked())
         self.settings.setValue("pdf_output_dir", self.pdf_output_edit.text().strip())
         self.settings.setValue("lilypond_binary", self.lilypond_binary.text().strip())
@@ -780,6 +1191,7 @@ class MainWindow(QMainWindow):
                 self._set_ui_from_config(cfg)
             except Exception:
                 pass
+        self.show_advanced_sustain.setChecked(self.settings.value("sustain_show_advanced", False, type=bool))
         self.pdf_enabled.setChecked(self.settings.value("pdf_enabled", False, type=bool))
         self.pdf_output_edit.setText(str(self.settings.value("pdf_output_dir", self.pdf_output_edit.text())))
         self.lilypond_binary.setText(str(self.settings.value("lilypond_binary", self.lilypond_binary.text())))

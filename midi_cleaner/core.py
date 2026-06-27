@@ -32,6 +32,10 @@ class TimingConfig:
     sustain_release_before_next_seconds: float
     sustain_min_hold_seconds: float
     sustain_max_hold_seconds: float
+    sustain_hybrid_extra_hold_seconds: float
+    sustain_hybrid_merge_gap_seconds: float
+    sustain_chordal_onset_window_seconds: float
+    sustain_continuous_window_seconds: float
 
 
 @dataclass
@@ -91,6 +95,10 @@ def build_timing_config(midi_obj: pretty_midi.PrettyMIDI, config: CleanerConfig)
         sustain_release_before_next_seconds=max(0.0, config.sustain_release_before_next_seconds * scale),
         sustain_min_hold_seconds=max(0.0, config.sustain_min_hold_seconds * scale),
         sustain_max_hold_seconds=max(0.0, config.sustain_max_hold_seconds * scale),
+        sustain_hybrid_extra_hold_seconds=max(0.0, config.sustain_hybrid_extra_hold_seconds * scale),
+        sustain_hybrid_merge_gap_seconds=max(0.0, config.sustain_hybrid_merge_gap_seconds * scale),
+        sustain_chordal_onset_window_seconds=max(0.0, config.sustain_chordal_onset_window_seconds * scale),
+        sustain_continuous_window_seconds=max(1.0, config.sustain_continuous_window_minutes * 60.0),
     )
 
 
@@ -377,44 +385,102 @@ def enforce_playability(
     return sorted(left_clean + right_clean, key=lambda n: (n.start, n.pitch, n.end))
 
 
-def _inject_periodic_sustain(
-    midi_obj: pretty_midi.PrettyMIDI,
-    instrument: pretty_midi.Instrument,
-    every_beats: int,
-    release_before_next_seconds: float,
-    stats: CleanStats,
-) -> None:
+def _cycle_bounds(midi_obj: pretty_midi.PrettyMIDI, every_beats: int) -> List[Tuple[float, float]]:
     if every_beats <= 0:
-        return
+        return []
     beats = midi_obj.get_beats()
     if len(beats) < every_beats + 1:
-        return
-
-    cycle_starts = list(range(0, len(beats) - 1, every_beats))
-    for idx in cycle_starts:
-        on_time = beats[idx]
+        return []
+    starts = list(range(0, len(beats) - 1, every_beats))
+    cycles: List[Tuple[float, float]] = []
+    for idx in starts:
+        start = beats[idx]
         if idx + every_beats < len(beats):
-            cycle_end = beats[idx + every_beats]
+            end = beats[idx + every_beats]
         else:
-            cycle_end = midi_obj.get_end_time()
-        off_time = max(on_time, cycle_end - release_before_next_seconds)
-        instrument.control_changes.append(pretty_midi.ControlChange(number=64, value=127, time=on_time))
-        instrument.control_changes.append(pretty_midi.ControlChange(number=64, value=0, time=off_time))
-        stats.sustain_events_added += 2
+            end = midi_obj.get_end_time()
+        if end > start:
+            cycles.append((start, end))
+    return cycles
 
 
-def _inject_adaptive_sustain(
+def _collect_periodic_sustain_intervals(
     midi_obj: pretty_midi.PrettyMIDI,
-    instrument: pretty_midi.Instrument,
+    every_beats: int,
+    release_before_next_seconds: float,
+    extend_sparse_cycles: bool = False,
+    notes: Optional[Sequence[pretty_midi.Note]] = None,
+    sparse_cycle_note_threshold: int = 2,
+    max_sparse_cycle_group: int = 3,
+    sparse_extra_hold_seconds: float = 0.0,
+) -> List[Tuple[float, float]]:
+    cycles = _cycle_bounds(midi_obj, every_beats)
+    if not cycles:
+        return []
+    intervals: List[Tuple[float, float]] = []
+
+    if not extend_sparse_cycles or not notes:
+        for start, end in cycles:
+            off = max(start, end - release_before_next_seconds)
+            if off > start:
+                intervals.append((start, off))
+        return intervals
+
+    sorted_notes = sorted(notes, key=lambda n: (n.start, n.end))
+    counts: List[int] = []
+    note_idx = 0
+    for start, end in cycles:
+        while note_idx < len(sorted_notes) and sorted_notes[note_idx].start < start:
+            note_idx += 1
+        look_idx = note_idx
+        count = 0
+        while look_idx < len(sorted_notes) and sorted_notes[look_idx].start < end:
+            count += 1
+            look_idx += 1
+        counts.append(count)
+
+    idx = 0
+    while idx < len(cycles):
+        start, end = cycles[idx]
+        sparse = counts[idx] <= sparse_cycle_note_threshold
+        if not sparse:
+            off = max(start, end - release_before_next_seconds)
+            if off > start:
+                intervals.append((start, off))
+            idx += 1
+            continue
+
+        group_end = idx
+        while group_end + 1 < len(cycles):
+            if (group_end - idx + 1) >= max_sparse_cycle_group:
+                break
+            if counts[group_end + 1] > sparse_cycle_note_threshold:
+                break
+            group_end += 1
+
+        merged_start = cycles[idx][0]
+        merged_cycle_end = cycles[group_end][1]
+        merged_end = merged_cycle_end + sparse_extra_hold_seconds
+        if group_end + 1 < len(cycles):
+            next_cycle_start = cycles[group_end + 1][0]
+            merged_end = min(merged_end, max(merged_start, next_cycle_start - release_before_next_seconds))
+        if merged_end > merged_start:
+            intervals.append((merged_start, merged_end))
+        idx = group_end + 1
+    return intervals
+
+
+def _collect_adaptive_sustain_intervals(
+    midi_obj: pretty_midi.PrettyMIDI,
+    notes: Sequence[pretty_midi.Note],
     gap_multiplier: float,
     min_hold_seconds: float,
     max_hold_seconds: float,
     release_before_next_seconds: float,
-    stats: CleanStats,
-) -> None:
-    notes = sorted(instrument.notes, key=lambda n: (n.start, n.end))
+) -> List[Tuple[float, float]]:
+    notes = sorted(notes, key=lambda n: (n.start, n.end))
     if not notes:
-        return
+        return []
 
     starts = [n.start for n in notes]
     consecutive_gaps = [starts[i + 1] - starts[i] for i in range(len(starts) - 1)]
@@ -428,9 +494,16 @@ def _inject_adaptive_sustain(
     phrases: List[List[pretty_midi.Note]] = []
     current_phrase = [notes[0]]
     current_end = notes[0].end
+    adaptive_link_grace = max(0.02, min_hold_seconds * 0.55)
+    melodic_bridge_gap = phrase_gap_threshold * 1.55
+
     for note in notes[1:]:
         silence_gap = note.start - current_end
-        if silence_gap <= phrase_gap_threshold:
+        last_pitch = current_phrase[-1].pitch
+        pitch_distance = abs(note.pitch - last_pitch)
+        can_bridge_melodic = pitch_distance <= 7 and silence_gap <= melodic_bridge_gap
+        can_bridge_dense = silence_gap <= max(phrase_gap_threshold, adaptive_link_grace)
+        if can_bridge_dense or can_bridge_melodic:
             current_phrase.append(note)
             current_end = max(current_end, note.end)
         else:
@@ -439,6 +512,7 @@ def _inject_adaptive_sustain(
             current_end = note.end
     phrases.append(current_phrase)
 
+    intervals: List[Tuple[float, float]] = []
     for idx, phrase in enumerate(phrases):
         phrase_start = phrase[0].start
         phrase_end = max(n.end for n in phrase)
@@ -448,10 +522,243 @@ def _inject_adaptive_sustain(
         if idx + 1 < len(phrases):
             next_start = phrases[idx + 1][0].start
             hold_end = min(hold_end, max(phrase_start, next_start - release_before_next_seconds))
-        if hold_end <= phrase_start:
+        if hold_end > phrase_start:
+            intervals.append((phrase_start, hold_end))
+    return intervals
+
+
+def _collect_chordal_sustain_intervals(
+    notes: Sequence[pretty_midi.Note],
+    base_chords: int,
+    density_sensitivity: float,
+    onset_window_seconds: float,
+    min_hold_seconds: float,
+    max_hold_seconds: float,
+    release_before_next_seconds: float,
+) -> List[Tuple[float, float]]:
+    ordered = sorted(notes, key=lambda n: (n.start, n.end, n.pitch))
+    if not ordered:
+        return []
+
+    def _build_chords(source_notes: Sequence[pretty_midi.Note], onset_window: float) -> List[Tuple[float, float, set[int]]]:
+        chord_events: List[Tuple[float, float, set[int]]] = []
+        idx = 0
+        while idx < len(source_notes):
+            anchor_start = source_notes[idx].start
+            chord_notes = [source_notes[idx]]
+            idx += 1
+            while idx < len(source_notes) and source_notes[idx].start <= (anchor_start + onset_window):
+                chord_notes.append(source_notes[idx])
+                idx += 1
+            chord_start = min(n.start for n in chord_notes)
+            chord_end = max(n.end for n in chord_notes)
+            pitch_classes = {n.pitch % 12 for n in chord_notes}
+            chord_events.append((chord_start, chord_end, pitch_classes))
+        return chord_events
+
+    onset_window = max(0.001, onset_window_seconds)
+    chords = _build_chords(ordered, onset_window)
+    if not chords:
+        return []
+
+    chord_onsets = [item[0] for item in chords]
+    onset_gaps = [chord_onsets[i + 1] - chord_onsets[i] for i in range(len(chord_onsets) - 1) if chord_onsets[i + 1] > chord_onsets[i]]
+    median_gap = statistics.median(onset_gaps) if onset_gaps else max(onset_window, 0.3)
+    reference_density = 1.0 / max(0.03, median_gap)
+    density_span = max(2, min(4, base_chords))
+
+    def _local_density(chord_index: int) -> float:
+        left = max(0, chord_index - density_span)
+        right = min(len(chords) - 1, chord_index + density_span)
+        if right == left:
+            duration = max(0.03, chords[right][1] - chords[left][0])
+        else:
+            duration = max(0.03, chords[right][0] - chords[left][0])
+        return (right - left + 1) / duration
+
+    def _is_harmonic_change(previous: set[int], current: set[int]) -> bool:
+        if not previous or not current:
+            return False
+        union = previous | current
+        if not union:
+            return False
+        similarity = len(previous & current) / len(union)
+        return similarity < 0.55
+
+    trigger_indices: List[int] = [0]
+    chords_since_trigger = 0
+    for chord_index in range(1, len(chords)):
+        chords_since_trigger += 1
+        local_density = _local_density(chord_index)
+        density_ratio = reference_density / max(0.03, local_density)
+        x_local_float = base_chords * (density_ratio ** max(0.0, density_sensitivity))
+        x_local = max(1, min(base_chords * 3, int(round(x_local_float))))
+
+        prev_pc = chords[chord_index - 1][2]
+        curr_pc = chords[chord_index][2]
+        harmonic_change = _is_harmonic_change(prev_pc, curr_pc)
+
+        near_refresh = chords_since_trigger >= max(1, x_local - 1)
+        cadence_due = chords_since_trigger >= x_local
+        if cadence_due or (harmonic_change and near_refresh):
+            trigger_indices.append(chord_index)
+            chords_since_trigger = 0
+    if trigger_indices[-1] != (len(chords) - 1):
+        trigger_indices.append(len(chords) - 1)
+
+    intervals: List[Tuple[float, float]] = []
+    for pos, chord_index in enumerate(trigger_indices):
+        start, chord_end, _ = chords[chord_index]
+        hold_end = max(chord_end, start + min_hold_seconds)
+        hold_end = min(hold_end, start + max_hold_seconds)
+        if pos + 1 < len(trigger_indices):
+            next_start = chords[trigger_indices[pos + 1]][0]
+            hold_end = min(hold_end, max(start, next_start - release_before_next_seconds))
+        if hold_end > start:
+            intervals.append((start, hold_end))
+    return intervals
+
+
+def _collect_continuous_reactive_sustain_intervals(
+    notes: Sequence[pretty_midi.Note],
+    reactivate_every_chords: int,
+    analysis_window_seconds: float,
+    onset_window_seconds: float,
+    release_before_reactivate_seconds: float,
+) -> List[Tuple[float, float]]:
+    ordered = sorted(notes, key=lambda n: (n.start, n.end, n.pitch))
+    if not ordered:
+        return []
+
+    onset_window = max(0.001, onset_window_seconds)
+    chords: List[Tuple[float, float]] = []
+    idx = 0
+    while idx < len(ordered):
+        anchor_start = ordered[idx].start
+        chord_notes = [ordered[idx]]
+        idx += 1
+        while idx < len(ordered) and ordered[idx].start <= (anchor_start + onset_window):
+            chord_notes.append(ordered[idx])
+            idx += 1
+        chord_start = min(n.start for n in chord_notes)
+        chord_end = max(n.end for n in chord_notes)
+        chords.append((chord_start, chord_end))
+    if not chords:
+        return []
+
+    chord_onsets = [item[0] for item in chords]
+    start_time = min(n.start for n in ordered)
+    end_time = max(n.end for n in ordered)
+    if end_time <= start_time:
+        return []
+
+    release_gap = max(0.01, release_before_reactivate_seconds)
+    window_seconds = max(1.0, analysis_window_seconds)
+    target_chords = max(1, reactivate_every_chords)
+
+    def _local_rate(now_time: float) -> float:
+        right = min(end_time, now_time + window_seconds)
+        duration = max(0.25, right - now_time)
+        count = sum(1 for onset in chord_onsets if now_time <= onset <= right)
+        return count / duration if count > 0 else 0.0
+
+    intervals: List[Tuple[float, float]] = []
+    segment_start = start_time
+    cursor_time = start_time
+    while True:
+        rate = _local_rate(cursor_time)
+        if rate <= 0.0:
+            break
+        target_seconds = target_chords / rate
+        next_target = cursor_time + max(0.05, target_seconds)
+        next_onset = next((onset for onset in chord_onsets if onset >= next_target), None)
+        if next_onset is None or next_onset >= end_time:
+            break
+        off_time = max(segment_start, next_onset - release_gap)
+        if off_time > segment_start:
+            intervals.append((segment_start, off_time))
+        segment_start = next_onset
+        cursor_time = next_onset
+    if end_time > segment_start:
+        intervals.append((segment_start, end_time))
+    return intervals
+
+
+def _merge_sustain_intervals(intervals: Sequence[Tuple[float, float]], merge_gap_seconds: float) -> List[Tuple[float, float]]:
+    if not intervals:
+        return []
+    ordered = sorted(intervals, key=lambda item: (item[0], item[1]))
+    merged: List[Tuple[float, float]] = []
+    current_start, current_end = ordered[0]
+    for start, end in ordered[1:]:
+        if start <= (current_end + merge_gap_seconds):
+            current_end = max(current_end, end)
+        else:
+            if current_end > current_start:
+                merged.append((current_start, current_end))
+            current_start, current_end = start, end
+    if current_end > current_start:
+        merged.append((current_start, current_end))
+    return merged
+
+
+def _enforce_min_release_gap(
+    intervals: Sequence[Tuple[float, float]], min_release_gap_seconds: float
+) -> List[Tuple[float, float]]:
+    if not intervals:
+        return []
+    if min_release_gap_seconds <= 0:
+        return list(intervals)
+
+    ordered = sorted(intervals, key=lambda item: (item[0], item[1]))
+    adjusted: List[Tuple[float, float]] = []
+    for start, end in ordered:
+        if end <= start:
             continue
-        instrument.control_changes.append(pretty_midi.ControlChange(number=64, value=127, time=phrase_start))
-        instrument.control_changes.append(pretty_midi.ControlChange(number=64, value=0, time=hold_end))
+        if not adjusted:
+            adjusted.append((start, end))
+            continue
+        prev_start, prev_end = adjusted[-1]
+        min_allowed_end = max(prev_start, start - min_release_gap_seconds)
+        if prev_end > min_allowed_end:
+            adjusted[-1] = (prev_start, min_allowed_end)
+            prev_end = min_allowed_end
+        if prev_end <= prev_start:
+            adjusted.pop()
+        if end > start:
+            adjusted.append((start, end))
+    return [(start, end) for start, end in adjusted if end > start]
+
+
+def _split_intervals_by_max_duration(
+    intervals: Sequence[Tuple[float, float]], max_duration_seconds: float, release_gap_seconds: float
+) -> List[Tuple[float, float]]:
+    if not intervals:
+        return []
+    if max_duration_seconds <= 0:
+        return list(intervals)
+
+    pieces: List[Tuple[float, float]] = []
+    for start, end in sorted(intervals, key=lambda item: (item[0], item[1])):
+        current_start = start
+        while (end - current_start) > max_duration_seconds:
+            split_end = current_start + max_duration_seconds
+            if split_end > current_start:
+                pieces.append((current_start, split_end))
+            current_start = split_end + max(0.0, release_gap_seconds)
+        if end > current_start:
+            pieces.append((current_start, end))
+    return pieces
+
+
+def _write_sustain_intervals(
+    instrument: pretty_midi.Instrument, intervals: Sequence[Tuple[float, float]], stats: CleanStats
+) -> None:
+    for start, end in intervals:
+        if end <= start:
+            continue
+        instrument.control_changes.append(pretty_midi.ControlChange(number=64, value=127, time=start))
+        instrument.control_changes.append(pretty_midi.ControlChange(number=64, value=0, time=end))
         stats.sustain_events_added += 2
 
 
@@ -459,24 +766,99 @@ def add_sustain_control_changes(
     midi_obj: pretty_midi.PrettyMIDI, instrument: pretty_midi.Instrument, timing: TimingConfig, config: CleanerConfig, stats: CleanStats
 ) -> None:
     instrument.control_changes = [cc for cc in instrument.control_changes if cc.number != 64]
+    notes = sorted(instrument.notes, key=lambda n: (n.start, n.end))
+    if not notes:
+        return
     if config.sustain_mode == "periodic":
-        _inject_periodic_sustain(
+        intervals = _collect_periodic_sustain_intervals(
             midi_obj=midi_obj,
-            instrument=instrument,
             every_beats=config.sustain_every_beats,
             release_before_next_seconds=timing.sustain_release_before_next_seconds,
-            stats=stats,
         )
-    else:
-        _inject_adaptive_sustain(
+    elif config.sustain_mode == "chordal":
+        chordal_intervals = _collect_chordal_sustain_intervals(
+            notes=notes,
+            base_chords=config.sustain_chordal_base_chords,
+            density_sensitivity=config.sustain_chordal_density_sensitivity,
+            onset_window_seconds=timing.sustain_chordal_onset_window_seconds,
+            min_hold_seconds=timing.sustain_min_hold_seconds,
+            max_hold_seconds=timing.sustain_max_hold_seconds,
+            release_before_next_seconds=timing.sustain_release_before_next_seconds,
+        )
+        merged = _merge_sustain_intervals(
+            chordal_intervals,
+            merge_gap_seconds=min(0.04, max(0.0, timing.sustain_release_before_next_seconds * 0.35)),
+        )
+        split = _split_intervals_by_max_duration(
+            merged,
+            max_duration_seconds=max(timing.sustain_min_hold_seconds, timing.sustain_max_hold_seconds),
+            release_gap_seconds=max(0.01, timing.sustain_release_before_next_seconds),
+        )
+        intervals = _enforce_min_release_gap(split, min_release_gap_seconds=max(0.01, timing.sustain_release_before_next_seconds))
+    elif config.sustain_mode == "continuous_reactive":
+        raw_intervals = _collect_continuous_reactive_sustain_intervals(
+            notes=notes,
+            reactivate_every_chords=config.sustain_continuous_reactivation_every_chords,
+            analysis_window_seconds=timing.sustain_continuous_window_seconds,
+            onset_window_seconds=timing.sustain_chordal_onset_window_seconds,
+            release_before_reactivate_seconds=timing.sustain_release_before_next_seconds,
+        )
+        intervals = _enforce_min_release_gap(
+            _merge_sustain_intervals(raw_intervals, merge_gap_seconds=0.0),
+            min_release_gap_seconds=max(0.01, timing.sustain_release_before_next_seconds),
+        )
+    elif config.sustain_mode == "hybrid":
+        cycles = _cycle_bounds(midi_obj, config.sustain_every_beats)
+        cycle_durations = [end - start for start, end in cycles if end > start]
+        median_cycle_duration = statistics.median(cycle_durations) if cycle_durations else 1.0
+        hybrid_release = timing.sustain_release_before_next_seconds * config.sustain_hybrid_release_factor
+        # Guardrail: keep merge strictly below release window, otherwise whole timeline can collapse into one interval.
+        hybrid_merge_gap = min(timing.sustain_hybrid_merge_gap_seconds, max(0.0, hybrid_release * 0.45))
+        max_sparse_block_cycles = min(2, max(1, config.sustain_hybrid_max_sparse_cycle_group))
+        max_hybrid_continuous_duration = max(
+            timing.sustain_min_hold_seconds,
+            median_cycle_duration * max_sparse_block_cycles + timing.sustain_hybrid_extra_hold_seconds,
+        )
+        periodic_intervals = _collect_periodic_sustain_intervals(
             midi_obj=midi_obj,
-            instrument=instrument,
+            every_beats=config.sustain_every_beats,
+            release_before_next_seconds=timing.sustain_release_before_next_seconds,
+            extend_sparse_cycles=True,
+            notes=notes,
+            sparse_cycle_note_threshold=config.sustain_hybrid_sparse_cycle_note_threshold,
+            max_sparse_cycle_group=config.sustain_hybrid_max_sparse_cycle_group,
+            sparse_extra_hold_seconds=timing.sustain_hybrid_extra_hold_seconds,
+        )
+        adaptive_intervals = _collect_adaptive_sustain_intervals(
+            midi_obj=midi_obj,
+            notes=notes,
+            gap_multiplier=config.sustain_gap_multiplier * config.sustain_hybrid_adaptive_gap_boost,
+            min_hold_seconds=timing.sustain_min_hold_seconds,
+            max_hold_seconds=max(
+                timing.sustain_max_hold_seconds, timing.sustain_min_hold_seconds + timing.sustain_hybrid_extra_hold_seconds
+            ),
+            release_before_next_seconds=hybrid_release,
+        )
+        merged_intervals = _merge_sustain_intervals(
+            periodic_intervals + adaptive_intervals,
+            merge_gap_seconds=hybrid_merge_gap,
+        )
+        split_intervals = _split_intervals_by_max_duration(
+            merged_intervals,
+            max_duration_seconds=max_hybrid_continuous_duration,
+            release_gap_seconds=max(0.01, hybrid_release),
+        )
+        intervals = _enforce_min_release_gap(split_intervals, min_release_gap_seconds=max(0.01, hybrid_release))
+    else:
+        intervals = _collect_adaptive_sustain_intervals(
+            midi_obj=midi_obj,
+            notes=notes,
             gap_multiplier=config.sustain_gap_multiplier,
             min_hold_seconds=timing.sustain_min_hold_seconds,
             max_hold_seconds=timing.sustain_max_hold_seconds,
             release_before_next_seconds=timing.sustain_release_before_next_seconds,
-            stats=stats,
         )
+    _write_sustain_intervals(instrument, intervals, stats)
     instrument.control_changes.sort(key=lambda cc: cc.time)
 
 

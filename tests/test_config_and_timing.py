@@ -35,3 +35,63 @@ def test_beats_time_unit_scales_thresholds() -> None:
     timing = build_timing_config(midi, config)
     assert timing.min_hand_move_delay_seconds == pytest.approx(1.0, rel=1e-2)
 
+
+def test_config_validation_accepts_hybrid_sustain_mode(tmp_path: Path) -> None:
+    config = CleanerConfig(
+        input_dir=tmp_path / "in",
+        output_dir=tmp_path / "out",
+        sustain_mode="hybrid",
+    )
+    config.validate()
+
+
+def test_config_validation_accepts_chordal_sustain_mode(tmp_path: Path) -> None:
+    config = CleanerConfig(
+        input_dir=tmp_path / "in",
+        output_dir=tmp_path / "out",
+        sustain_mode="chordal",
+    )
+    config.validate()
+
+
+def test_config_validation_accepts_continuous_reactive_sustain_mode(tmp_path: Path) -> None:
+    config = CleanerConfig(
+        input_dir=tmp_path / "in",
+        output_dir=tmp_path / "out",
+        sustain_mode="continuous_reactive",
+    )
+    config.validate()
+
+
+def test_config_validation_rejects_invalid_hybrid_release_factor(tmp_path: Path) -> None:
+    config = CleanerConfig(
+        input_dir=tmp_path / "in",
+        output_dir=tmp_path / "out",
+        sustain_mode="hybrid",
+        sustain_hybrid_release_factor=0.0,
+    )
+    with pytest.raises(ValueError, match="sustain_hybrid_release_factor must be > 0"):
+        config.validate()
+
+
+def test_config_validation_rejects_invalid_chordal_base_chords(tmp_path: Path) -> None:
+    config = CleanerConfig(
+        input_dir=tmp_path / "in",
+        output_dir=tmp_path / "out",
+        sustain_mode="chordal",
+        sustain_chordal_base_chords=0,
+    )
+    with pytest.raises(ValueError, match="sustain_chordal_base_chords must be >= 1"):
+        config.validate()
+
+
+def test_config_validation_rejects_invalid_continuous_reactivation_chords(tmp_path: Path) -> None:
+    config = CleanerConfig(
+        input_dir=tmp_path / "in",
+        output_dir=tmp_path / "out",
+        sustain_mode="continuous_reactive",
+        sustain_continuous_reactivation_every_chords=0,
+    )
+    with pytest.raises(ValueError, match="sustain_continuous_reactivation_every_chords must be >= 1"):
+        config.validate()
+
