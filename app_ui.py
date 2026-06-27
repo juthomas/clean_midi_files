@@ -37,20 +37,6 @@ from PySide6.QtWidgets import (
 
 from midi_cleaner.config import CleanerConfig
 from midi_cleaner.core import FileProcessResult, format_stats, process_batch
-from midi_cleaner.score_export import (
-    export_directory_to_pdf,
-    export_midi_to_pdf,
-    find_lilypond_binary,
-)
-
-
-@dataclass
-class PdfOptions:
-    enabled: bool
-    output_dir: Path
-    lilypond_binary: str
-    skip_if_missing: bool
-
 
 LOG_COLORS = {
     "INFO": QColor("#89D185"),
@@ -214,58 +200,26 @@ class StatusTableItem(QTableWidgetItem):
 class CleanerWorker(QObject):
     progress = Signal(int, int)
     log = Signal(str)
-    row = Signal(str, str, str, str)
-    done = Signal(int, int, int, int, int, bool)
+    row = Signal(str, str, str)
+    done = Signal(int, int, int, bool)
 
-    def __init__(self, config: CleanerConfig, pdf_options: PdfOptions, cancel_event: threading.Event) -> None:
+    def __init__(self, config: CleanerConfig, cancel_event: threading.Event) -> None:
         super().__init__()
         self.config = config
-        self.pdf_options = pdf_options
         self.cancel_event = cancel_event
 
     def run(self) -> None:
-        pdf_ok = 0
-        pdf_failed = 0
-        pdf_enabled = self.pdf_options.enabled
-        lilypond_resolved = find_lilypond_binary(self.pdf_options.lilypond_binary) if pdf_enabled else None
-        if pdf_enabled and lilypond_resolved is None:
-            if self.pdf_options.skip_if_missing:
-                self.log.emit(
-                    f"[WARNING] LilyPond not found ({self.pdf_options.lilypond_binary}). "
-                    "Skipping PDF export for this run."
-                )
-                pdf_enabled = False
-            else:
-                self.log.emit(f"[ERROR] LilyPond not found: {self.pdf_options.lilypond_binary}")
-
         def on_file_complete(result: FileProcessResult, index: int, total: int) -> None:
-            nonlocal pdf_ok, pdf_failed
             self.progress.emit(index, total)
             if result.success and result.stats:
                 midi_status = "OK"
                 detail = format_stats(result.relative_path, result.stats)
-                pdf_status = "-"
-                if pdf_enabled:
-                    pdf_path = (self.pdf_options.output_dir / result.relative_path).with_suffix(".pdf")
-                    pdf_result = export_midi_to_pdf(
-                        midi_path=result.output_path,
-                        pdf_path=pdf_path,
-                        lilypond_binary=str(lilypond_resolved),
-                    )
-                    if pdf_result.success:
-                        pdf_status = "OK"
-                        pdf_ok += 1
-                    else:
-                        pdf_status = "FAILED"
-                        pdf_failed += 1
-                        detail = f"{detail} | pdf_error={pdf_result.error}"
-                self.row.emit(str(result.relative_path), midi_status, pdf_status, detail)
+                self.row.emit(str(result.relative_path), midi_status, detail)
                 self.log.emit(f"[INFO] {detail}")
             else:
                 midi_status = "FAILED"
-                pdf_status = "-"
                 detail = result.error
-                self.row.emit(str(result.relative_path), midi_status, pdf_status, detail)
+                self.row.emit(str(result.relative_path), midi_status, detail)
                 self.log.emit(f"[WARNING] {result.relative_path}: {result.error}")
 
         batch = process_batch(
@@ -277,71 +231,6 @@ class CleanerWorker(QObject):
             batch.total_files,
             batch.processed_count,
             batch.failed_count,
-            pdf_ok,
-            pdf_failed,
-            batch.canceled,
-        )
-
-
-class PdfOnlyWorker(QObject):
-    progress = Signal(int, int)
-    log = Signal(str)
-    row = Signal(str, str, str, str)
-    done = Signal(int, int, int, int, int, bool)
-
-    def __init__(self, midi_input_dir: Path, pdf_options: PdfOptions, recursive: bool, cancel_event: threading.Event) -> None:
-        super().__init__()
-        self.midi_input_dir = midi_input_dir
-        self.pdf_options = pdf_options
-        self.recursive = recursive
-        self.cancel_event = cancel_event
-
-    def run(self) -> None:
-        pdf_ok = 0
-        pdf_failed = 0
-        lilypond_resolved = find_lilypond_binary(self.pdf_options.lilypond_binary)
-        if lilypond_resolved is None:
-            if self.pdf_options.skip_if_missing:
-                self.log.emit(
-                    f"[WARNING] LilyPond not found ({self.pdf_options.lilypond_binary}). "
-                    "PDF generation skipped."
-                )
-                self.done.emit(0, 0, 0, 0, 0, False)
-                return
-            self.log.emit(f"[ERROR] LilyPond not found: {self.pdf_options.lilypond_binary}")
-            self.done.emit(0, 0, 0, 0, 0, False)
-            return
-
-        def on_file_complete(item, index: int, total: int) -> None:
-            nonlocal pdf_ok, pdf_failed
-            self.progress.emit(index, total)
-            rel = str(item.relative_path or item.midi_path.name)
-            midi_status = "N/A"
-            if item.success:
-                pdf_status = "OK"
-                pdf_ok += 1
-                detail = f"[INFO] {rel} -> PDF OK"
-            else:
-                pdf_status = "FAILED"
-                pdf_failed += 1
-                detail = f"[WARNING] {rel}: {item.error}"
-            self.row.emit(rel, midi_status, pdf_status, detail.replace("[INFO] ", "").replace("[WARNING] ", ""))
-            self.log.emit(detail)
-
-        batch = export_directory_to_pdf(
-            midi_input_dir=self.midi_input_dir,
-            pdf_output_dir=self.pdf_options.output_dir,
-            lilypond_binary=str(lilypond_resolved),
-            recursive=self.recursive,
-            on_file_complete=on_file_complete,
-            should_cancel=self.cancel_event.is_set,
-        )
-        self.done.emit(
-            batch.total_files,
-            batch.processed_count,
-            batch.failed_count,
-            pdf_ok,
-            pdf_failed,
             batch.canceled,
         )
 
@@ -353,7 +242,6 @@ class MainWindow(QMainWindow):
         self.resize(1200, 820)
         self._thread: Optional[QThread] = None
         self._worker: Optional[CleanerWorker] = None
-        self._pdf_worker: Optional[PdfOnlyWorker] = None
         self._cancel_event = threading.Event()
         self._applying_sustain_profile = False
         self.settings = QSettings("punkhazard", "MidiCleaner")
@@ -369,22 +257,16 @@ class MainWindow(QMainWindow):
         path_layout = QGridLayout(path_group)
         self.input_edit = QLineEdit()
         self.output_edit = QLineEdit()
-        self.pdf_output_edit = QLineEdit()
         input_btn = QPushButton("Parcourir...")
         output_btn = QPushButton("Parcourir...")
-        pdf_output_btn = QPushButton("Parcourir...")
         input_btn.clicked.connect(lambda: self._pick_directory(self.input_edit))
         output_btn.clicked.connect(lambda: self._pick_directory(self.output_edit))
-        pdf_output_btn.clicked.connect(lambda: self._pick_directory(self.pdf_output_edit))
         path_layout.addWidget(QLabel("Dossier source MIDI"), 0, 0)
         path_layout.addWidget(self.input_edit, 0, 1)
         path_layout.addWidget(input_btn, 0, 2)
         path_layout.addWidget(QLabel("Dossier sortie MIDI"), 1, 0)
         path_layout.addWidget(self.output_edit, 1, 1)
         path_layout.addWidget(output_btn, 1, 2)
-        path_layout.addWidget(QLabel("Dossier sortie Partition PDF"), 2, 0)
-        path_layout.addWidget(self.pdf_output_edit, 2, 1)
-        path_layout.addWidget(pdf_output_btn, 2, 2)
         root_layout.addWidget(path_group)
 
         options_layout = QHBoxLayout()
@@ -392,7 +274,6 @@ class MainWindow(QMainWindow):
         options_layout.addWidget(self._build_playability_group())
         options_layout.addWidget(self._build_sustain_group())
         root_layout.addLayout(options_layout)
-        root_layout.addWidget(self._build_pdf_group())
 
         buttons_layout = QHBoxLayout()
         self.run_btn = QPushButton("Lancer nettoyage")
@@ -420,8 +301,8 @@ class MainWindow(QMainWindow):
         self.progress_bar.setValue(0)
         root_layout.addWidget(self.progress_bar)
 
-        self.table = QTableWidget(0, 4)
-        self.table.setHorizontalHeaderLabels(["Fichier", "Statut MIDI", "Statut PDF", "Details"])
+        self.table = QTableWidget(0, 3)
+        self.table.setHorizontalHeaderLabels(["Fichier", "Statut MIDI", "Details"])
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.setSortingEnabled(True)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -466,9 +347,7 @@ class MainWindow(QMainWindow):
         self.max_duration.setSingleStep(0.05)
         self.max_duration.setToolTip("Seconds in mixed/seconds mode, beats in beats mode")
         form.addRow(self.recursive_check)
-        form.addRow("Unite temporelle", self.time_unit_combo)
         form.addRow("Separation main gauche/droite (pitch MIDI)", self.split_pitch)
-        form.addRow("Strategie separation mains", self.hand_split_mode_combo)
         form.addRow("Pitch minimum autorise (0-127)", self.min_pitch)
         form.addRow("Pitch maximum autorise (0-127)", self.max_pitch)
         self.label_max_duration = QLabel("Duree max d'une note")
@@ -597,25 +476,20 @@ class MainWindow(QMainWindow):
         form.addRow(self.label_sustain_chordal_onset_window, self.sustain_chordal_onset_window)
         form.addRow(self.label_sustain_continuous_reactivate_chords, self.sustain_continuous_reactivate_chords)
         form.addRow(self.label_sustain_continuous_window_minutes, self.sustain_continuous_window_minutes)
+        form.addRow(self.label_sustain_min_hold, self.sustain_min_hold)
+        form.addRow(self.label_sustain_max_hold, self.sustain_max_hold)
+        form.addRow(self.label_sustain_release, self.sustain_release)
 
         self.sustain_advanced_widget = QWidget()
         advanced_form = QFormLayout(self.sustain_advanced_widget)
-        advanced_form.addRow(self.label_sustain_mode, self.sustain_mode)
         advanced_form.addRow(self.label_sustain_every_beats, self.sustain_every_beats)
         advanced_form.addRow(self.label_sustain_gap_multiplier, self.sustain_gap_multiplier)
-        advanced_form.addRow(self.label_sustain_min_hold, self.sustain_min_hold)
-        advanced_form.addRow(self.label_sustain_max_hold, self.sustain_max_hold)
-        advanced_form.addRow(self.label_sustain_release, self.sustain_release)
         advanced_form.addRow(self.label_sustain_hybrid_sparse_threshold, self.sustain_hybrid_sparse_threshold)
         advanced_form.addRow(self.label_sustain_hybrid_sparse_group, self.sustain_hybrid_sparse_group)
         advanced_form.addRow(self.label_sustain_hybrid_extra_hold, self.sustain_hybrid_extra_hold)
         advanced_form.addRow(self.label_sustain_hybrid_adaptive_boost, self.sustain_hybrid_adaptive_boost)
         advanced_form.addRow(self.label_sustain_hybrid_release_factor, self.sustain_hybrid_release_factor)
         advanced_form.addRow(self.label_sustain_hybrid_merge_gap, self.sustain_hybrid_merge_gap)
-
-        form.addRow("Profil sustain", self.sustain_profile_combo)
-        form.addRow(self.show_advanced_sustain)
-        form.addRow(self.sustain_advanced_widget)
 
         self.sustain_mode.currentIndexChanged.connect(self._refresh_sustain_control_visibility)
         self.sustain_mode.currentIndexChanged.connect(self._mark_sustain_profile_custom)
@@ -643,34 +517,12 @@ class MainWindow(QMainWindow):
         self._refresh_sustain_control_visibility()
         return group
 
-    def _build_pdf_group(self) -> QGroupBox:
-        group = QGroupBox("Generation Partition PDF")
-        form = QFormLayout(group)
-        self.pdf_enabled = QCheckBox("Exporter PDF pendant nettoyage")
-        self.pdf_enabled.setChecked(False)
-        self.pdf_skip_if_missing = QCheckBox("Ignorer PDF si LilyPond absent")
-        self.pdf_skip_if_missing.setChecked(True)
-        self.lilypond_binary = QLineEdit()
-        self.lilypond_binary.setToolTip("Nom ou chemin complet du binaire LilyPond")
-        self.pdf_only_btn = QPushButton("Generer PDF depuis sorties MIDI")
-        self.pdf_only_btn.clicked.connect(self._run_pdf_only)
-        self.open_pdf_output_btn = QPushButton("Ouvrir dossier Partition PDF")
-        self.open_pdf_output_btn.clicked.connect(lambda: self._open_folder(Path(self.pdf_output_edit.text().strip())))
-        form.addRow(self.pdf_enabled)
-        form.addRow(self.pdf_skip_if_missing)
-        form.addRow("Binaire LilyPond", self.lilypond_binary)
-        form.addRow(self.pdf_only_btn)
-        form.addRow(self.open_pdf_output_btn)
-        return group
-
     def _load_defaults(self) -> None:
         project_dir = Path(__file__).resolve().parent
         default_input = project_dir / "input_midi" if (project_dir / "input_midi").exists() else Path.home() / "input_midi"
         default_output = project_dir / "output_midi"
         config = CleanerConfig(input_dir=default_input, output_dir=default_output)
         self._set_ui_from_config(config)
-        self.pdf_output_edit.setText(str((project_dir / "output_pdf").resolve()))
-        self.lilypond_binary.setText("lilypond")
         self._refresh_time_unit_labels()
 
     def _build_config_from_ui(self) -> CleanerConfig:
@@ -678,9 +530,9 @@ class MainWindow(QMainWindow):
             input_dir=Path(self.input_edit.text().strip()),
             output_dir=Path(self.output_edit.text().strip()),
             recursive=self.recursive_check.isChecked(),
-            time_unit=str(self.time_unit_combo.currentData()),
+            time_unit="mixed",
             split_pitch=self.split_pitch.value(),
-            hand_split_mode=str(self.hand_split_mode_combo.currentData()),
+            hand_split_mode="cost_based",
             min_pitch=self.min_pitch.value(),
             max_pitch=self.max_pitch.value(),
             max_simultaneous_per_hand=self.max_simultaneous.value(),
@@ -689,7 +541,7 @@ class MainWindow(QMainWindow):
             max_duration_seconds=self.max_duration.value(),
             merge_gap_seconds=self.merge_gap.value(),
             merge_min_duration_seconds=self.merge_min_duration.value(),
-            sustain_mode=str(self.sustain_mode.currentData()),
+            sustain_mode="continuous_reactive",
             sustain_every_beats=self.sustain_every_beats.value(),
             sustain_gap_multiplier=self.sustain_gap_multiplier.value(),
             sustain_min_hold_seconds=self.sustain_min_hold.value(),
@@ -704,9 +556,10 @@ class MainWindow(QMainWindow):
             sustain_chordal_base_chords=self.sustain_chordal_base_chords.value(),
             sustain_chordal_density_sensitivity=self.sustain_chordal_density_sensitivity.value(),
             sustain_chordal_onset_window_seconds=self.sustain_chordal_onset_window.value(),
-            sustain_continuous_reactivation_every_chords=self.sustain_continuous_reactivate_chords.value(),
-            sustain_continuous_window_minutes=self.sustain_continuous_window_minutes.value(),
+            sustain_continuous_reactivation_every_chords=3,
+            sustain_continuous_window_minutes=2.0,
         )
+        self._enforce_frozen_ui_values(config)
         config.validate()
         return config
 
@@ -748,9 +601,24 @@ class MainWindow(QMainWindow):
         self.sustain_chordal_onset_window.setValue(config.sustain_chordal_onset_window_seconds)
         self.sustain_continuous_reactivate_chords.setValue(config.sustain_continuous_reactivation_every_chords)
         self.sustain_continuous_window_minutes.setValue(config.sustain_continuous_window_minutes)
+        self._enforce_frozen_ui_values()
         self._refresh_time_unit_labels()
         self._refresh_sustain_control_visibility()
         self._sync_sustain_profile_from_values()
+
+    def _enforce_frozen_ui_values(self, config: Optional[CleanerConfig] = None) -> None:
+        if config is not None:
+            config.time_unit = "mixed"
+            config.hand_split_mode = "cost_based"
+            config.sustain_mode = "continuous_reactive"
+            config.sustain_continuous_reactivation_every_chords = 3
+            config.sustain_continuous_window_minutes = 2.0
+
+        self.time_unit_combo.setCurrentIndex(self.time_unit_combo.findData("mixed"))
+        self.hand_split_mode_combo.setCurrentIndex(self.hand_split_mode_combo.findData("cost_based"))
+        self.sustain_mode.setCurrentIndex(self.sustain_mode.findData("continuous_reactive"))
+        self.sustain_continuous_reactivate_chords.setValue(3)
+        self.sustain_continuous_window_minutes.setValue(2.0)
 
     def _refresh_time_unit_labels(self, _index: int = -1) -> None:
         unit_mode = str(self.time_unit_combo.currentData())
@@ -978,10 +846,9 @@ class MainWindow(QMainWindow):
         target.mkdir(parents=True, exist_ok=True)
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(target)))
 
-    def _add_result_row(self, file_path: str, midi_status: str, pdf_status: str, details: str) -> None:
+    def _add_result_row(self, file_path: str, midi_status: str, details: str) -> None:
         midi_rank = 1 if midi_status == "FAILED" else 0
-        pdf_rank = 1 if pdf_status == "FAILED" else 0
-        combined_rank = (midi_rank, pdf_rank, file_path)
+        combined_rank = (midi_rank, file_path)
 
         self.table.setSortingEnabled(False)
         row = self.table.rowCount()
@@ -989,22 +856,17 @@ class MainWindow(QMainWindow):
         self.table.setItem(row, 0, QTableWidgetItem(file_path))
         midi_item = StatusTableItem(midi_status)
         midi_item.setData(256, combined_rank)
-        pdf_item = StatusTableItem(pdf_status)
-        pdf_item.setData(256, (pdf_rank, midi_rank, file_path))
         self.table.setItem(row, 1, midi_item)
-        self.table.setItem(row, 2, pdf_item)
-        self.table.setItem(row, 3, QTableWidgetItem(details))
+        self.table.setItem(row, 2, QTableWidgetItem(details))
         self.table.setSortingEnabled(True)
         self.table.scrollToItem(self.table.item(row, 0))
 
     def _set_running(self, running: bool) -> None:
         self.run_btn.setEnabled(not running)
         self.cancel_btn.setEnabled(running)
-        self.pdf_only_btn.setEnabled(not running)
         self.save_preset_btn.setEnabled(not running)
         self.load_preset_btn.setEnabled(not running)
         self.open_output_btn.setEnabled(not running)
-        self.open_pdf_output_btn.setEnabled(not running)
 
     def _cancel_batch(self) -> None:
         if self._thread and self._thread.isRunning():
@@ -1027,19 +889,6 @@ class MainWindow(QMainWindow):
             return
         config.input_dir = input_dir
         config.output_dir = output_dir
-        pdf_options = PdfOptions(
-            enabled=self.pdf_enabled.isChecked(),
-            output_dir=Path(self.pdf_output_edit.text().strip() or str(Path.home() / "output_pdf")).expanduser().resolve(),
-            lilypond_binary=self.lilypond_binary.text().strip() or "lilypond",
-            skip_if_missing=self.pdf_skip_if_missing.isChecked(),
-        )
-        if pdf_options.enabled and find_lilypond_binary(pdf_options.lilypond_binary) is None and not pdf_options.skip_if_missing:
-            QMessageBox.critical(
-                self,
-                "LilyPond absent",
-                f"LilyPond introuvable: {pdf_options.lilypond_binary}\nActive le mode skip ou installe LilyPond.",
-            )
-            return
         self.table.setRowCount(0)
         self.table.sortItems(0, Qt.AscendingOrder)
         self.log_output.clear()
@@ -1051,8 +900,7 @@ class MainWindow(QMainWindow):
         self._append_log("[INFO] Demarrage nettoyage MIDI...")
 
         self._thread = QThread(self)
-        self._worker = CleanerWorker(config=config, pdf_options=pdf_options, cancel_event=self._cancel_event)
-        self._pdf_worker = None
+        self._worker = CleanerWorker(config=config, cancel_event=self._cancel_event)
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
         self._worker.progress.connect(self._on_progress)
@@ -1064,53 +912,6 @@ class MainWindow(QMainWindow):
         self._thread.finished.connect(self._worker.deleteLater)
         self._thread.start()
 
-    def _run_pdf_only(self) -> None:
-        midi_input_dir = Path(self.output_edit.text().strip()).expanduser().resolve()
-        if not midi_input_dir.exists() or not midi_input_dir.is_dir():
-            QMessageBox.critical(self, "Source PDF invalide", f"Dossier MIDI source introuvable:\n{midi_input_dir}")
-            return
-        pdf_options = PdfOptions(
-            enabled=True,
-            output_dir=Path(self.pdf_output_edit.text().strip() or str(Path.home() / "output_pdf")).expanduser().resolve(),
-            lilypond_binary=self.lilypond_binary.text().strip() or "lilypond",
-            skip_if_missing=self.pdf_skip_if_missing.isChecked(),
-        )
-        if find_lilypond_binary(pdf_options.lilypond_binary) is None and not pdf_options.skip_if_missing:
-            QMessageBox.critical(
-                self,
-                "LilyPond absent",
-                f"LilyPond introuvable: {pdf_options.lilypond_binary}",
-            )
-            return
-        self.table.setRowCount(0)
-        self.table.sortItems(0, Qt.AscendingOrder)
-        self.log_output.clear()
-        self.progress_bar.setValue(0)
-        self.progress_label.setText("0 / 0")
-        self._set_running(True)
-        self._cancel_event.clear()
-        self._persist_settings()
-        self._append_log(f"[INFO] Demarrage generation PDF depuis {midi_input_dir}")
-
-        self._thread = QThread(self)
-        self._worker = None
-        self._pdf_worker = PdfOnlyWorker(
-            midi_input_dir=midi_input_dir,
-            pdf_options=pdf_options,
-            recursive=self.recursive_check.isChecked(),
-            cancel_event=self._cancel_event,
-        )
-        self._pdf_worker.moveToThread(self._thread)
-        self._thread.started.connect(self._pdf_worker.run)
-        self._pdf_worker.progress.connect(self._on_progress)
-        self._pdf_worker.log.connect(self._append_log)
-        self._pdf_worker.row.connect(self._add_result_row)
-        self._pdf_worker.done.connect(self._on_done)
-        self._pdf_worker.done.connect(self._thread.quit)
-        self._thread.finished.connect(self._thread.deleteLater)
-        self._thread.finished.connect(self._pdf_worker.deleteLater)
-        self._thread.start()
-
     def _on_progress(self, current: int, total: int) -> None:
         if total <= 0:
             self.progress_bar.setValue(0)
@@ -1119,13 +920,10 @@ class MainWindow(QMainWindow):
         self.progress_bar.setValue(int((current / total) * 100))
         self.progress_label.setText(f"{current} / {total}")
 
-    def _on_done(self, total: int, processed: int, failed: int, pdf_ok: int, pdf_failed: int, canceled: bool) -> None:
+    def _on_done(self, total: int, processed: int, failed: int, canceled: bool) -> None:
         self._set_running(False)
         summary_prefix = "Annule" if canceled else "Termine"
-        self._append_log(
-            f"{summary_prefix}. total={total}, processed={processed}, failed={failed}, "
-            f"pdf_ok={pdf_ok}, pdf_failed={pdf_failed}"
-        )
+        self._append_log(f"{summary_prefix}. total={total}, processed={processed}, failed={failed}")
         QMessageBox.information(
             self,
             "Traitement termine",
@@ -1133,23 +931,16 @@ class MainWindow(QMainWindow):
                 f"Status: {summary_prefix}\n"
                 f"Files: {total}\n"
                 f"Processed: {processed}\n"
-                f"Failed: {failed}\n"
-                f"PDF ok: {pdf_ok}\n"
-                f"PDF failed: {pdf_failed}"
+                f"Failed: {failed}"
             ),
         )
         self._thread = None
         self._worker = None
-        self._pdf_worker = None
 
     def _save_preset(self) -> None:
         config = self._build_config_from_ui()
         preset = {
             "cleaner_config": config.as_json_dict(),
-            "pdf_enabled": self.pdf_enabled.isChecked(),
-            "pdf_output_dir": self.pdf_output_edit.text().strip(),
-            "lilypond_binary": self.lilypond_binary.text().strip(),
-            "pdf_skip_if_missing": self.pdf_skip_if_missing.isChecked(),
         }
         target, _ = QFileDialog.getSaveFileName(self, "Save preset", "preset.json", "JSON (*.json)")
         if not target:
@@ -1165,10 +956,6 @@ class MainWindow(QMainWindow):
             data = json.loads(Path(src).read_text(encoding="utf-8"))
             config = CleanerConfig.from_json_dict(data["cleaner_config"])
             self._set_ui_from_config(config)
-            self.pdf_enabled.setChecked(bool(data.get("pdf_enabled", False)))
-            self.pdf_output_edit.setText(str(data.get("pdf_output_dir", "output_pdf")))
-            self.lilypond_binary.setText(str(data.get("lilypond_binary", "lilypond")))
-            self.pdf_skip_if_missing.setChecked(bool(data.get("pdf_skip_if_missing", True)))
             self._append_log(f"Preset loaded: {src}")
             self._persist_settings()
         except Exception as exc:
@@ -1177,11 +964,6 @@ class MainWindow(QMainWindow):
     def _persist_settings(self) -> None:
         config = self._build_config_from_ui()
         self.settings.setValue("cleaner_config", json.dumps(config.as_json_dict()))
-        self.settings.setValue("sustain_show_advanced", self.show_advanced_sustain.isChecked())
-        self.settings.setValue("pdf_enabled", self.pdf_enabled.isChecked())
-        self.settings.setValue("pdf_output_dir", self.pdf_output_edit.text().strip())
-        self.settings.setValue("lilypond_binary", self.lilypond_binary.text().strip())
-        self.settings.setValue("pdf_skip_if_missing", self.pdf_skip_if_missing.isChecked())
 
     def _load_settings(self) -> None:
         raw_cfg = self.settings.value("cleaner_config", "")
@@ -1191,11 +973,6 @@ class MainWindow(QMainWindow):
                 self._set_ui_from_config(cfg)
             except Exception:
                 pass
-        self.show_advanced_sustain.setChecked(self.settings.value("sustain_show_advanced", False, type=bool))
-        self.pdf_enabled.setChecked(self.settings.value("pdf_enabled", False, type=bool))
-        self.pdf_output_edit.setText(str(self.settings.value("pdf_output_dir", self.pdf_output_edit.text())))
-        self.lilypond_binary.setText(str(self.settings.value("lilypond_binary", self.lilypond_binary.text())))
-        self.pdf_skip_if_missing.setChecked(self.settings.value("pdf_skip_if_missing", True, type=bool))
 
     def closeEvent(self, event) -> None:  # noqa: N802
         try:
