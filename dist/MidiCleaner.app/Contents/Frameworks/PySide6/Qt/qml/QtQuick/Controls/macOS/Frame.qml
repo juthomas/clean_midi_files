@@ -1,0 +1,1 @@
+../../../../../../../Resources/PySide6/Qt/qml/QtQuick/Controls/macOS/Frame.qml

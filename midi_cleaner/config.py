@@ -26,6 +26,57 @@ class CleanerConfig:
     sustain_min_hold_seconds: float = 0.2
     sustain_max_hold_seconds: float = 8.0
     sustain_release_before_next_seconds: float = 0.05
+    dry_run: bool = False
+    hand_split_mode: str = "cost_based"
+    hand_cost_movement_weight: float = 1.0
+    hand_cost_span_weight: float = 1.6
+    hand_cost_overlap_weight: float = 2.0
+    hand_cost_register_bias_weight: float = 0.45
+
+    def validate(self) -> None:
+        if not str(self.input_dir).strip():
+            raise ValueError("input_dir is required.")
+        if not str(self.output_dir).strip():
+            raise ValueError("output_dir is required.")
+        if self.time_unit not in {"mixed", "seconds", "beats"}:
+            raise ValueError("time_unit must be one of: mixed, seconds, beats.")
+        if self.hand_split_mode not in {"cost_based", "threshold"}:
+            raise ValueError("hand_split_mode must be one of: cost_based, threshold.")
+        if self.sustain_mode not in {"adaptive", "periodic"}:
+            raise ValueError("sustain_mode must be one of: adaptive, periodic.")
+        if not (0 <= self.min_pitch <= 127 and 0 <= self.max_pitch <= 127):
+            raise ValueError("min_pitch and max_pitch must be between 0 and 127.")
+        if self.min_pitch > self.max_pitch:
+            raise ValueError("min_pitch must be <= max_pitch.")
+        if not (0 <= self.split_pitch <= 127):
+            raise ValueError("split_pitch must be between 0 and 127.")
+        if self.max_simultaneous_per_hand < 1:
+            raise ValueError("max_simultaneous_per_hand must be >= 1.")
+        if self.max_hand_span_semitones < 0:
+            raise ValueError("max_hand_span_semitones must be >= 0.")
+
+        non_negative_fields = {
+            "min_hand_move_delay_seconds": self.min_hand_move_delay_seconds,
+            "max_duration_seconds": self.max_duration_seconds,
+            "merge_gap_seconds": self.merge_gap_seconds,
+            "merge_min_duration_seconds": self.merge_min_duration_seconds,
+            "sustain_every_beats": float(self.sustain_every_beats),
+            "sustain_gap_multiplier": self.sustain_gap_multiplier,
+            "sustain_min_hold_seconds": self.sustain_min_hold_seconds,
+            "sustain_max_hold_seconds": self.sustain_max_hold_seconds,
+            "sustain_release_before_next_seconds": self.sustain_release_before_next_seconds,
+            "hand_cost_movement_weight": self.hand_cost_movement_weight,
+            "hand_cost_span_weight": self.hand_cost_span_weight,
+            "hand_cost_overlap_weight": self.hand_cost_overlap_weight,
+            "hand_cost_register_bias_weight": self.hand_cost_register_bias_weight,
+        }
+        for field_name, value in non_negative_fields.items():
+            if value < 0:
+                raise ValueError(f"{field_name} must be >= 0.")
+        if self.sustain_every_beats < 1:
+            raise ValueError("sustain_every_beats must be >= 1.")
+        if self.sustain_max_hold_seconds < self.sustain_min_hold_seconds:
+            raise ValueError("sustain_max_hold_seconds must be >= sustain_min_hold_seconds.")
 
     def as_json_dict(self) -> Dict[str, Any]:
         data = asdict(self)
@@ -55,5 +106,11 @@ class CleanerConfig:
             sustain_min_hold_seconds=float(data.get("sustain_min_hold_seconds", 0.2)),
             sustain_max_hold_seconds=float(data.get("sustain_max_hold_seconds", 8.0)),
             sustain_release_before_next_seconds=float(data.get("sustain_release_before_next_seconds", 0.05)),
+            dry_run=bool(data.get("dry_run", False)),
+            hand_split_mode=str(data.get("hand_split_mode", "cost_based")),
+            hand_cost_movement_weight=float(data.get("hand_cost_movement_weight", 1.0)),
+            hand_cost_span_weight=float(data.get("hand_cost_span_weight", 1.6)),
+            hand_cost_overlap_weight=float(data.get("hand_cost_overlap_weight", 2.0)),
+            hand_cost_register_bias_weight=float(data.get("hand_cost_register_bias_weight", 0.45)),
         )
 

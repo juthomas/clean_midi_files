@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import statistics
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, List, Optional, Sequence, Tuple
@@ -8,6 +9,7 @@ from typing import Callable, List, Optional, Sequence, Tuple
 import pretty_midi
 
 from .config import CleanerConfig
+from .errors import humanize_exception
 
 
 @dataclass
@@ -18,6 +20,7 @@ class CleanStats:
     truncated_for_playability: int = 0
     skipped_for_playability: int = 0
     sustain_events_added: int = 0
+    eof_repaired: int = 0
 
 
 @dataclass
@@ -47,6 +50,7 @@ class BatchProcessResult:
     processed_count: int
     failed_count: int
     results: List[FileProcessResult]
+    canceled: bool = False
 
 
 def midi_files(input_dir: Path, recursive: bool) -> List[Path]:
@@ -88,6 +92,43 @@ def build_timing_config(midi_obj: pretty_midi.PrettyMIDI, config: CleanerConfig)
         sustain_min_hold_seconds=max(0.0, config.sustain_min_hold_seconds * scale),
         sustain_max_hold_seconds=max(0.0, config.sustain_max_hold_seconds * scale),
     )
+
+
+def _try_load_pretty_midi_from_bytes(data: bytes) -> pretty_midi.PrettyMIDI | None:
+    with tempfile.NamedTemporaryFile(suffix=".mid", delete=True) as tmp:
+        tmp.write(data)
+        tmp.flush()
+        try:
+            return pretty_midi.PrettyMIDI(tmp.name)
+        except Exception:
+            return None
+
+
+def _attempt_repair_eof(input_file: Path) -> pretty_midi.PrettyMIDI | None:
+    data = input_file.read_bytes()
+    if not data:
+        return None
+    # Minimal salvage strategy: append end-of-track markers and try conservative truncations.
+    eot = b"\x00\xFF\x2F\x00"
+    candidates: List[bytes] = [data + eot]
+    for trim in (1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024):
+        if len(data) > trim:
+            candidates.append(data[:-trim] + eot)
+    for candidate in candidates:
+        repaired = _try_load_pretty_midi_from_bytes(candidate)
+        if repaired is not None:
+            return repaired
+    return None
+
+
+def load_midi_with_repair(input_file: Path) -> Tuple[pretty_midi.PrettyMIDI, bool]:
+    try:
+        return pretty_midi.PrettyMIDI(str(input_file)), False
+    except EOFError as eof_error:
+        repaired = _attempt_repair_eof(input_file)
+        if repaired is not None:
+            return repaired, True
+        raise eof_error
 
 
 def remove_out_of_range(notes: Sequence[pretty_midi.Note], min_pitch: int, max_pitch: int, stats: CleanStats) -> List[pretty_midi.Note]:
@@ -150,6 +191,108 @@ def split_hands(notes: Sequence[pretty_midi.Note], split_pitch: int) -> Tuple[Li
     return left, right
 
 
+def _hand_assignment_cost(
+    note: pretty_midi.Note,
+    hand: str,
+    active_notes: Sequence[pretty_midi.Note],
+    last_pitch: Optional[int],
+    split_pitch: int,
+    max_simultaneous_per_hand: int,
+    max_hand_span_semitones: int,
+    movement_weight: float,
+    span_weight: float,
+    overlap_weight: float,
+    register_bias_weight: float,
+) -> float:
+    anchor_pitch = split_pitch - 12 if hand == "left" else split_pitch + 12
+    reference_pitch = last_pitch if last_pitch is not None else anchor_pitch
+    movement_cost = abs(note.pitch - reference_pitch) * movement_weight
+
+    if hand == "left":
+        register_distance = max(0, note.pitch - split_pitch)
+    else:
+        register_distance = max(0, split_pitch - note.pitch)
+    register_cost = register_distance * register_bias_weight
+
+    projected_count = len(active_notes) + 1
+    overlap_excess = max(0, projected_count - max_simultaneous_per_hand)
+    overlap_cost = overlap_excess * overlap_weight * 12.0
+
+    pitches = [n.pitch for n in active_notes] + [note.pitch]
+    span = max(pitches) - min(pitches) if pitches else 0
+    span_excess = max(0, span - max_hand_span_semitones)
+    span_cost = span_excess * span_weight
+    return movement_cost + register_cost + overlap_cost + span_cost
+
+
+def assign_hands_cost_based(
+    notes: Sequence[pretty_midi.Note],
+    split_pitch: int,
+    max_simultaneous_per_hand: int,
+    max_hand_span_semitones: int,
+    min_hand_move_delay: float,
+    movement_weight: float,
+    span_weight: float,
+    overlap_weight: float,
+    register_bias_weight: float,
+) -> Tuple[List[pretty_midi.Note], List[pretty_midi.Note]]:
+    ordered = sorted(notes, key=lambda n: (n.start, n.pitch, n.end))
+    left: List[pretty_midi.Note] = []
+    right: List[pretty_midi.Note] = []
+    left_active: List[pretty_midi.Note] = []
+    right_active: List[pretty_midi.Note] = []
+    last_left_pitch: Optional[int] = None
+    last_right_pitch: Optional[int] = None
+
+    for note in ordered:
+        left_active = [n for n in left_active if (n.end + min_hand_move_delay) > note.start]
+        right_active = [n for n in right_active if (n.end + min_hand_move_delay) > note.start]
+
+        left_cost = _hand_assignment_cost(
+            note=note,
+            hand="left",
+            active_notes=left_active,
+            last_pitch=last_left_pitch,
+            split_pitch=split_pitch,
+            max_simultaneous_per_hand=max_simultaneous_per_hand,
+            max_hand_span_semitones=max_hand_span_semitones,
+            movement_weight=movement_weight,
+            span_weight=span_weight,
+            overlap_weight=overlap_weight,
+            register_bias_weight=register_bias_weight,
+        )
+        right_cost = _hand_assignment_cost(
+            note=note,
+            hand="right",
+            active_notes=right_active,
+            last_pitch=last_right_pitch,
+            split_pitch=split_pitch,
+            max_simultaneous_per_hand=max_simultaneous_per_hand,
+            max_hand_span_semitones=max_hand_span_semitones,
+            movement_weight=movement_weight,
+            span_weight=span_weight,
+            overlap_weight=overlap_weight,
+            register_bias_weight=register_bias_weight,
+        )
+
+        if left_cost < right_cost:
+            target_hand = "left"
+        elif right_cost < left_cost:
+            target_hand = "right"
+        else:
+            target_hand = "left" if note.pitch <= split_pitch else "right"
+
+        if target_hand == "left":
+            left.append(note)
+            left_active.append(note)
+            last_left_pitch = note.pitch
+        else:
+            right.append(note)
+            right_active.append(note)
+            last_right_pitch = note.pitch
+    return left, right
+
+
 def _remove_note_from_active(
     note: pretty_midi.Note,
     active: List[pretty_midi.Note],
@@ -161,6 +304,7 @@ def _remove_note_from_active(
     if note in active:
         active.remove(note)
     if note is current_note:
+        note.end = note.start
         stats.skipped_for_playability += 1
         return
     target_end = current_start - min_hand_move_delay
@@ -206,8 +350,26 @@ def enforce_playability(
     max_hand_span_semitones: int,
     min_hand_move_delay: float,
     stats: CleanStats,
+    hand_split_mode: str = "cost_based",
+    hand_cost_movement_weight: float = 1.0,
+    hand_cost_span_weight: float = 1.6,
+    hand_cost_overlap_weight: float = 2.0,
+    hand_cost_register_bias_weight: float = 0.45,
 ) -> List[pretty_midi.Note]:
-    left, right = split_hands(notes, split_pitch=split_pitch)
+    if hand_split_mode == "threshold":
+        left, right = split_hands(notes, split_pitch=split_pitch)
+    else:
+        left, right = assign_hands_cost_based(
+            notes=notes,
+            split_pitch=split_pitch,
+            max_simultaneous_per_hand=max_simultaneous_per_hand,
+            max_hand_span_semitones=max_hand_span_semitones,
+            min_hand_move_delay=min_hand_move_delay,
+            movement_weight=hand_cost_movement_weight,
+            span_weight=hand_cost_span_weight,
+            overlap_weight=hand_cost_overlap_weight,
+            register_bias_weight=hand_cost_register_bias_weight,
+        )
     left_clean = enforce_hand_playability(left, max_simultaneous_per_hand, max_hand_span_semitones, min_hand_move_delay, stats)
     right_clean = enforce_hand_playability(
         right, max_simultaneous_per_hand, max_hand_span_semitones, min_hand_move_delay, stats
@@ -330,13 +492,20 @@ def clean_instrument_notes(instrument: pretty_midi.Instrument, timing: TimingCon
         max_hand_span_semitones=config.max_hand_span_semitones,
         min_hand_move_delay=timing.min_hand_move_delay_seconds,
         stats=stats,
+        hand_split_mode=config.hand_split_mode,
+        hand_cost_movement_weight=config.hand_cost_movement_weight,
+        hand_cost_span_weight=config.hand_cost_span_weight,
+        hand_cost_overlap_weight=config.hand_cost_overlap_weight,
+        hand_cost_register_bias_weight=config.hand_cost_register_bias_weight,
     )
     instrument.notes = notes
 
 
 def process_file(input_file: Path, output_file: Path, config: CleanerConfig) -> CleanStats:
-    midi_obj = pretty_midi.PrettyMIDI(str(input_file))
+    midi_obj, repaired = load_midi_with_repair(input_file)
     stats = CleanStats()
+    if repaired:
+        stats.eof_repaired = 1
     timing = build_timing_config(midi_obj, config)
 
     for instrument in midi_obj.instruments:
@@ -345,24 +514,33 @@ def process_file(input_file: Path, output_file: Path, config: CleanerConfig) -> 
         clean_instrument_notes(instrument, timing, config, stats)
         add_sustain_control_changes(midi_obj, instrument, timing=timing, config=config, stats=stats)
 
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    midi_obj.write(str(output_file))
+    if not config.dry_run:
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        midi_obj.write(str(output_file))
     return stats
 
 
 def process_batch(
     config: CleanerConfig,
     on_file_complete: Optional[Callable[[FileProcessResult, int, int], None]] = None,
+    should_cancel: Optional[Callable[[], bool]] = None,
 ) -> BatchProcessResult:
+    config.validate()
     input_dir = config.input_dir.expanduser().resolve()
     output_dir = config.output_dir.expanduser().resolve()
+    if input_dir == output_dir:
+        raise ValueError("input_dir and output_dir must be different.")
     files = midi_files(input_dir, recursive=config.recursive)
 
     results: List[FileProcessResult] = []
     processed_count = 0
     failed_count = 0
+    canceled = False
 
     for index, src in enumerate(files, start=1):
+        if should_cancel and should_cancel():
+            canceled = True
+            break
         rel = src.relative_to(input_dir)
         dst = output_dir / rel
         try:
@@ -381,7 +559,7 @@ def process_batch(
                 output_path=dst,
                 relative_path=rel,
                 success=False,
-                error=f"{type(exc).__name__}: {exc}",
+                error=humanize_exception(exc),
             )
             failed_count += 1
         results.append(result)
@@ -393,6 +571,7 @@ def process_batch(
         processed_count=processed_count,
         failed_count=failed_count,
         results=results,
+        canceled=canceled,
     )
 
 
@@ -404,6 +583,7 @@ def format_stats(path: Path, stats: CleanStats) -> str:
         f"merged_repetitions={stats.merged_repetitions}, "
         f"truncated_for_playability={stats.truncated_for_playability}, "
         f"skipped_for_playability={stats.skipped_for_playability}, "
-        f"sustain_events_added={stats.sustain_events_added}"
+        f"sustain_events_added={stats.sustain_events_added}, "
+        f"eof_repaired={stats.eof_repaired}"
     )
 

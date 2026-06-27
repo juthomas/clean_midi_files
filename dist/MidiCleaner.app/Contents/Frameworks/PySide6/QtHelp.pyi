@@ -1,0 +1,1 @@
+../../Resources/PySide6/QtHelp.pyi

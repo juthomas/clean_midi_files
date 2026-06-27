@@ -1,0 +1,1 @@
+../../Resources/PySide6/__feature__.pyi

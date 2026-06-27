@@ -1,0 +1,1 @@
+../../Resources/PySide6/_git_pyside_version.py

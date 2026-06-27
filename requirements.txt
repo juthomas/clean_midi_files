@@ -1,3 +1,5 @@
 pretty_midi
 music21
 pyside6
+pytest
+pyinstaller

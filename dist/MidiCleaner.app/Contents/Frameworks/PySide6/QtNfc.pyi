@@ -1,0 +1,1 @@
+../../Resources/PySide6/QtNfc.pyi

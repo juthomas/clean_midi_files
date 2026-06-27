@@ -1,0 +1,1 @@
+../../../../../../../../Resources/PySide6/Qt/qml/QtQuick/Controls/Material/impl/SliderHandle.qml
