@@ -1,1 +1,0 @@
-Assistant__dot__app
